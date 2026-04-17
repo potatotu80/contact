@@ -16,15 +16,12 @@
       "required": true,
       "unique": true
     },
+    "phone": {
+      "type": "string"
+    },
     "device_id": {
       "type": "string",
       "required": true
-    },
-    "contacts": {
-      "type": "relation",
-      "relation": "oneToMany",
-      "target": "api::contact.contact",
-      "mappedBy": "user"
     }
   }
 }

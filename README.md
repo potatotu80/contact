@@ -21,10 +21,17 @@ Custom collection endpoints:
 
 - `GET/POST /api/app-users`
 - `GET/PUT/DELETE /api/app-users/:id`
+- `GET /api/app-users/:id/contacts`
 - `GET/POST /api/contacts`
 - `GET/PUT/DELETE /api/contacts/:id`
 
 `app-users` is used for the route path to avoid conflicting with Strapi's built-in `users-permissions` plugin routes under `/api/users`.
+
+To view all contacts for one app user without using a large relation picker in the admin form, use:
+
+```text
+GET /api/app-users/:id/contacts
+```
 
 ## Run Locally
 

@@ -26,7 +26,6 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::app-user.app-user",
-      "inversedBy": "contacts",
       "required": true
     }
   }
