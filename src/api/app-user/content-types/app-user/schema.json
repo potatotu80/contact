@@ -1,0 +1,30 @@
+{
+  "kind": "collectionType",
+  "collectionName": "app_users",
+  "info": {
+    "singularName": "app-user",
+    "pluralName": "app-users",
+    "displayName": "User",
+    "description": "Application users that own contacts"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "email": {
+      "type": "email",
+      "required": true,
+      "unique": true
+    },
+    "device_id": {
+      "type": "string",
+      "required": true
+    },
+    "contacts": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::contact.contact",
+      "mappedBy": "user"
+    }
+  }
+}
