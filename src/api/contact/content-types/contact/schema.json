@@ -22,6 +22,12 @@
     "email": {
       "type": "email"
     },
+    "user_email": {
+      "type": "string"
+    },
+    "user_phone": {
+      "type": "string"
+    },
     "user": {
       "type": "relation",
       "relation": "manyToOne",

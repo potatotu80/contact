@@ -409,6 +409,8 @@ export interface ApiContactContact extends Schema.CollectionType {
     name: Attribute.String & Attribute.Required;
     phone: Attribute.String & Attribute.Required;
     email: Attribute.Email;
+    user_email: Attribute.String;
+    user_phone: Attribute.String;
     user: Attribute.Relation<
       'api::contact.contact',
       'manyToOne',

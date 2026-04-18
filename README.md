@@ -11,6 +11,8 @@ This workspace contains a Strapi v4 backend configured to use PostgreSQL.
   - `name` (`string`, required)
   - `phone` (`string`, required)
   - `email` (`email`, optional)
+  - `user_email` (`string`, auto-filled from related User for easier filtering)
+  - `user_phone` (`string`, auto-filled from related User for easier filtering)
   - `user` (`many-to-one` relation to `User`, required)
 
 ## REST API
@@ -24,6 +26,7 @@ Custom collection endpoints:
 - `GET /api/app-users/:id/contacts`
 - `GET/POST /api/contacts`
 - `GET/PUT/DELETE /api/contacts/:id`
+- `POST /api/s3/presign`
 
 `app-users` is used for the route path to avoid conflicting with Strapi's built-in `users-permissions` plugin routes under `/api/users`.
 
@@ -31,6 +34,21 @@ To view all contacts for one app user without using a large relation picker in t
 
 ```text
 GET /api/app-users/:id/contacts
+```
+
+For large datasets in the Contact list, filter by `user_email` or `user_phone` instead of relying only on relation picker filters.
+
+S3 image uploads are done via presigned URLs from:
+
+```text
+POST /api/s3/presign
+```
+
+Request body supports `fileName`, `contentType`, and `userId` (or `userEmail`).
+The returned upload URL stores files under:
+
+```text
+users/<userId>/images/
 ```
 
 ## Run Locally
@@ -114,12 +132,21 @@ DATABASE_USERNAME=postgres
 DATABASE_PASSWORD=change-me
 DATABASE_SCHEMA=public
 DATABASE_SSL=false
+AWS_REGION=ap-southeast-1
+S3_BUCKET_NAME=yengtesting
+S3_IMAGES_PREFIX=users
+S3_PRESIGN_EXPIRES_IN=900
+STRAPI_ADMIN_S3_BUCKET=yengtesting
+STRAPI_ADMIN_S3_REGION=ap-southeast-1
+STRAPI_ADMIN_S3_IMAGES_PREFIX=users
 APP_KEYS="replace-me-1,replace-me-2,replace-me-3,replace-me-4"
 API_TOKEN_SALT=replace-me
 ADMIN_JWT_SECRET=replace-me
 TRANSFER_TOKEN_SALT=replace-me
 JWT_SECRET=replace-me
 ```
+
+When running on EC2 with an attached IAM role, you should not set static AWS keys in `.env`. The AWS SDK will use the instance role automatically.
 
 Build and run in production:
 
