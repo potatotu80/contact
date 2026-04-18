@@ -2,4 +2,27 @@
 
 const { createCoreRouter } = require('@strapi/strapi').factories;
 
-module.exports = createCoreRouter('api::app-user.app-user');
+const defaultRouter = createCoreRouter('api::app-user.app-user');
+
+const customRouter = {
+  routes: [
+    {
+      method: 'GET',
+      path: '/app-users/:id/contacts',
+      handler: 'app-user.contacts',
+      config: {
+        policies: [],
+        middlewares: [],
+      },
+    },
+  ],
+};
+
+module.exports = {
+  get prefix() {
+    return defaultRouter.prefix;
+  },
+  get routes() {
+    return customRouter.routes.concat(defaultRouter.routes);
+  },
+};

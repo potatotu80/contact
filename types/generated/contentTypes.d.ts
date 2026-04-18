@@ -362,6 +362,78 @@ export interface AdminTransferTokenPermission extends Schema.CollectionType {
   };
 }
 
+export interface ApiAppUserAppUser extends Schema.CollectionType {
+  collectionName: 'app_users';
+  info: {
+    singularName: 'app-user';
+    pluralName: 'app-users';
+    displayName: 'User';
+    description: 'Application users that own contacts';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    email: Attribute.Email & Attribute.Required & Attribute.Unique;
+    phone: Attribute.String;
+    device_id: Attribute.String & Attribute.Required;
+    createdAt: Attribute.DateTime;
+    updatedAt: Attribute.DateTime;
+    createdBy: Attribute.Relation<
+      'api::app-user.app-user',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+    updatedBy: Attribute.Relation<
+      'api::app-user.app-user',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+  };
+}
+
+export interface ApiContactContact extends Schema.CollectionType {
+  collectionName: 'contacts';
+  info: {
+    singularName: 'contact';
+    pluralName: 'contacts';
+    displayName: 'Contact';
+    description: 'Contacts related to an application user';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    name: Attribute.String & Attribute.Required;
+    phone: Attribute.String & Attribute.Required;
+    email: Attribute.Email;
+    user_email: Attribute.String;
+    user_phone: Attribute.String;
+    user: Attribute.Relation<
+      'api::contact.contact',
+      'manyToOne',
+      'api::app-user.app-user'
+    > &
+      Attribute.Required;
+    createdAt: Attribute.DateTime;
+    updatedAt: Attribute.DateTime;
+    createdBy: Attribute.Relation<
+      'api::contact.contact',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+    updatedBy: Attribute.Relation<
+      'api::contact.contact',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+  };
+}
+
 export interface PluginUploadFile extends Schema.CollectionType {
   collectionName: 'files';
   info: {
@@ -677,80 +749,6 @@ export interface PluginUsersPermissionsUser extends Schema.CollectionType {
   };
 }
 
-export interface ApiAppUserAppUser extends Schema.CollectionType {
-  collectionName: 'app_users';
-  info: {
-    singularName: 'app-user';
-    pluralName: 'app-users';
-    displayName: 'User';
-    description: 'Application users that own contacts';
-  };
-  options: {
-    draftAndPublish: false;
-  };
-  attributes: {
-    email: Attribute.Email & Attribute.Required & Attribute.Unique;
-    device_id: Attribute.String & Attribute.Required;
-    contacts: Attribute.Relation<
-      'api::app-user.app-user',
-      'oneToMany',
-      'api::contact.contact'
-    >;
-    createdAt: Attribute.DateTime;
-    updatedAt: Attribute.DateTime;
-    createdBy: Attribute.Relation<
-      'api::app-user.app-user',
-      'oneToOne',
-      'admin::user'
-    > &
-      Attribute.Private;
-    updatedBy: Attribute.Relation<
-      'api::app-user.app-user',
-      'oneToOne',
-      'admin::user'
-    > &
-      Attribute.Private;
-  };
-}
-
-export interface ApiContactContact extends Schema.CollectionType {
-  collectionName: 'contacts';
-  info: {
-    singularName: 'contact';
-    pluralName: 'contacts';
-    displayName: 'Contact';
-    description: 'Contacts related to an application user';
-  };
-  options: {
-    draftAndPublish: false;
-  };
-  attributes: {
-    name: Attribute.String & Attribute.Required;
-    phone: Attribute.String & Attribute.Required;
-    email: Attribute.Email;
-    user: Attribute.Relation<
-      'api::contact.contact',
-      'manyToOne',
-      'api::app-user.app-user'
-    > &
-      Attribute.Required;
-    createdAt: Attribute.DateTime;
-    updatedAt: Attribute.DateTime;
-    createdBy: Attribute.Relation<
-      'api::contact.contact',
-      'oneToOne',
-      'admin::user'
-    > &
-      Attribute.Private;
-    updatedBy: Attribute.Relation<
-      'api::contact.contact',
-      'oneToOne',
-      'admin::user'
-    > &
-      Attribute.Private;
-  };
-}
-
 declare module '@strapi/types' {
   export module Shared {
     export interface ContentTypes {
@@ -761,14 +759,14 @@ declare module '@strapi/types' {
       'admin::api-token-permission': AdminApiTokenPermission;
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
+      'api::app-user.app-user': ApiAppUserAppUser;
+      'api::contact.contact': ApiContactContact;
       'plugin::upload.file': PluginUploadFile;
       'plugin::upload.folder': PluginUploadFolder;
       'plugin::i18n.locale': PluginI18NLocale;
       'plugin::users-permissions.permission': PluginUsersPermissionsPermission;
       'plugin::users-permissions.role': PluginUsersPermissionsRole;
       'plugin::users-permissions.user': PluginUsersPermissionsUser;
-      'api::app-user.app-user': ApiAppUserAppUser;
-      'api::contact.contact': ApiContactContact;
     }
   }
 }

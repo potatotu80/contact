@@ -68,6 +68,13 @@ DATABASE_USERNAME=contact_app
 DATABASE_PASSWORD=change-this-password
 DATABASE_SCHEMA=public
 DATABASE_SSL=false
+AWS_REGION=ap-southeast-1
+S3_BUCKET_NAME=yengtesting
+S3_IMAGES_PREFIX=users
+S3_PRESIGN_EXPIRES_IN=900
+STRAPI_ADMIN_S3_BUCKET=yengtesting
+STRAPI_ADMIN_S3_REGION=ap-southeast-1
+STRAPI_ADMIN_S3_IMAGES_PREFIX=users
 APP_KEYS="replace-me-1,replace-me-2,replace-me-3,replace-me-4"
 API_TOKEN_SALT=replace-me
 ADMIN_JWT_SECRET=replace-me
@@ -79,6 +86,51 @@ Generate strong secrets with:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+## 5.1 IAM role for S3 access (recommended)
+
+You are using an EC2 IAM role, so do **not** set `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY` in `.env`.
+
+Attach an IAM policy like this to the EC2 instance role:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AllowUploadObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": "arn:aws:s3:::yengtesting/users/*"
+    },
+    {
+      "Sid": "AllowReadForValidationOptional",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject"
+      ],
+      "Resource": "arn:aws:s3:::yengtesting/users/*"
+    },
+    {
+      "Sid": "AllowListBucketForConsolePrefixOptional",
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::yengtesting",
+      "Condition": {
+        "StringLike": {
+          "s3:prefix": [
+            "users/*"
+          ]
+        }
+      }
+    }
+  ]
+}
 ```
 
 ## 6. Install and build
@@ -148,5 +200,17 @@ After deployment:
 
 - `https://api.yengsang.com/api/app-users`
 - `https://cmsportal.yengsang.com/admin`
+- `POST https://api.yengsang.com/api/s3/presign`
 
 The API and admin UI are served by the same Strapi process, but Nginx separates the public API hostname from the admin hostname.
+
+For a quick presign test in production:
+
+```bash
+curl -X POST https://api.yengsang.com/api/s3/presign \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_STRAPI_API_TOKEN>" \
+  -d '{"fileName":"test.jpg","contentType":"image/jpeg","userId":1}'
+```
+
+The response should return `uploadUrl`, `key`, and `folderPath` under `users/1/images/`.

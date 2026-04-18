@@ -22,11 +22,16 @@
     "email": {
       "type": "email"
     },
+    "user_email": {
+      "type": "string"
+    },
+    "user_phone": {
+      "type": "string"
+    },
     "user": {
       "type": "relation",
       "relation": "manyToOne",
       "target": "api::app-user.app-user",
-      "inversedBy": "contacts",
       "required": true
     }
   }
