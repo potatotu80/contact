@@ -4,8 +4,8 @@ import { ExternalLink } from '@strapi/icons';
 import { useCMEditViewDataManager } from '@strapi/helper-plugin';
 
 const APP_USER_UID = 'api::app-user.app-user';
-const S3_BUCKET = process.env.STRAPI_ADMIN_S3_BUCKET || '';
-const S3_REGION = process.env.STRAPI_ADMIN_S3_REGION || '';
+const S3_BUCKET = process.env.STRAPI_ADMIN_S3_BUCKET || 'yengtesting';
+const S3_REGION = process.env.STRAPI_ADMIN_S3_REGION || 'ap-southeast-1';
 const S3_IMAGES_PREFIX = process.env.STRAPI_ADMIN_S3_IMAGES_PREFIX || 'users';
 
 const formatDateTime = (value) => {
