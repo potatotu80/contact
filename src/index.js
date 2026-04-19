@@ -285,7 +285,7 @@ module.exports = {
       },
       {
         method: 'GET',
-        path: '/app-user-gallery/:id',
+        path: '/admin/app-user-gallery/:id',
         handler: async (ctx) => {
           const userId = parsePositiveInt(ctx.params.id);
           if (!userId) {
