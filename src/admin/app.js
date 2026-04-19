@@ -154,8 +154,9 @@ const AppUserPanel = () => {
     let isMounted = true;
 
     const loadGallery = async () => {
-      if (!userId) {
+      if (!isAppUser || !userId) {
         setGalleryItems([]);
+        setIsGalleryLoading(false);
         return;
       }
 
@@ -185,7 +186,7 @@ const AppUserPanel = () => {
     return () => {
       isMounted = false;
     };
-  }, [get, toggleNotification, userId]);
+  }, [get, isAppUser, toggleNotification, userId]);
 
   if (!isAppUser) return null;
 
