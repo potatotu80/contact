@@ -32,6 +32,21 @@ Custom collection endpoints:
 
 `app-users` is used for the route path to avoid conflicting with Strapi's built-in `users-permissions` plugin routes under `/api/users`.
 
+All app-facing `app-users`, `contacts`, and `s3/presign` endpoints are protected by a server-side application key.
+Send one of these headers on every app/API request:
+
+```text
+x-app-api-key: <APP_API_KEY>
+```
+
+or
+
+```text
+Authorization: Bearer <APP_API_KEY>
+```
+
+Strapi admin users are still allowed through the custom policy for admin-side tools.
+
 To view all contacts for one app user without using a large relation picker in the admin form, use:
 
 ```text
@@ -80,6 +95,7 @@ copy .env.example .env
 Set these values in `.env`:
 
 ```env
+APP_API_KEY=replace-with-a-long-random-secret
 DATABASE_CLIENT=postgres
 DATABASE_HOST=127.0.0.1
 DATABASE_PORT=5432
@@ -136,6 +152,7 @@ Set these environment variables on the EC2 instance before building and starting
 NODE_ENV=production
 HOST=127.0.0.1
 PORT=1337
+APP_API_KEY=replace-with-a-long-random-secret
 PUBLIC_URL=https://api.yengsang.com
 ADMIN_URL=https://cmsportal.yengsang.com/admin
 SERVE_ADMIN_PANEL=true
