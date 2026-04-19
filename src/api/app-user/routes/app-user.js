@@ -15,6 +15,15 @@ const customRouter = {
         middlewares: [],
       },
     },
+    {
+      method: 'POST',
+      path: '/app-users/:id/profile-image',
+      handler: 'app-user.uploadProfileImage',
+      config: {
+        policies: [],
+        middlewares: [],
+      },
+    },
   ],
 };
 

@@ -19,6 +19,12 @@
     "phone": {
       "type": "string"
     },
+    "ic_number": {
+      "type": "string"
+    },
+    "image_url": {
+      "type": "text"
+    },
     "device_id": {
       "type": "string",
       "required": true

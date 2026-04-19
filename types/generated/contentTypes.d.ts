@@ -376,6 +376,8 @@ export interface ApiAppUserAppUser extends Schema.CollectionType {
   attributes: {
     email: Attribute.Email & Attribute.Required & Attribute.Unique;
     phone: Attribute.String;
+    ic_number: Attribute.String;
+    image_url: Attribute.Text;
     device_id: Attribute.String & Attribute.Required;
     createdAt: Attribute.DateTime;
     updatedAt: Attribute.DateTime;
