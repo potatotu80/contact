@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { ExternalLink } from '@strapi/icons';
 import { useCMEditViewDataManager, useFetchClient, useNotification } from '@strapi/helper-plugin';
+import { useRouteMatch } from 'react-router-dom';
 
 const APP_USER_UID = 'api::app-user.app-user';
 const CONTACT_UID = 'api::contact.contact';
@@ -165,10 +166,12 @@ const AppUserPanel = () => {
   );
 };
 
-const BulkClearActions = ({ slug }) => {
+const BulkClearActions = () => {
   const [isClearing, setIsClearing] = useState(false);
   const { get, del } = useFetchClient();
   const toggleNotification = useNotification();
+  const match = useRouteMatch('/content-manager/collectionType/:slug');
+  const slug = match?.params?.slug;
   const isSupportedList = slug === APP_USER_UID || slug === CONTACT_UID;
   if (!isSupportedList) return null;
 
