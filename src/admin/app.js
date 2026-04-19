@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { ExternalLink } from '@strapi/icons';
 import { useCMEditViewDataManager, useFetchClient, useNotification } from '@strapi/helper-plugin';
@@ -44,6 +44,63 @@ const buildCollectionTypeListUrl = (slug, queryParams = {}) => {
   return url.toString();
 };
 
+const GalleryPreview = ({ items }) => {
+  if (!items.length) {
+    return (
+      <Typography variant="omega" textColor="neutral500">
+        No S3 gallery images found for this user yet.
+      </Typography>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gap: '12px',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(92px, 1fr))',
+      }}
+    >
+      {items.map((item) => (
+        <a
+          key={item.key}
+          href={item.signedUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ textDecoration: 'none' }}
+        >
+          <div
+            style={{
+              border: '1px solid #dcdce4',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              background: '#ffffff',
+            }}
+          >
+            <img
+              src={item.signedUrl}
+              alt={item.key}
+              style={{
+                width: '100%',
+                height: '92px',
+                objectFit: 'cover',
+                display: 'block',
+                background: '#f6f6f9',
+              }}
+            />
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+};
+
+const normalizeGalleryItems = (response) => {
+  if (Array.isArray(response?.data?.data)) return response.data.data;
+  if (Array.isArray(response?.data)) return response.data;
+  return [];
+};
+
 const fetchAllEntryIds = async (get, slug) => {
   const pageSize = 100;
   let page = 1;
@@ -75,6 +132,10 @@ const fetchAllEntryIds = async (get, slug) => {
 
 const AppUserPanel = () => {
   const { slug, initialData } = useCMEditViewDataManager();
+  const { get } = useFetchClient();
+  const toggleNotification = useNotification();
+  const [galleryItems, setGalleryItems] = useState([]);
+  const [isGalleryLoading, setIsGalleryLoading] = useState(false);
 
   const isAppUser = slug === APP_USER_UID;
   const userId = initialData?.id;
@@ -88,6 +149,43 @@ const AppUserPanel = () => {
     [initialData?.updatedAt]
   );
   const userImagesUrl = useMemo(() => buildS3ConsoleFolderUrl(userId), [userId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadGallery = async () => {
+      if (!userId) {
+        setGalleryItems([]);
+        return;
+      }
+
+      try {
+        setIsGalleryLoading(true);
+        const response = await get(`/app-user-gallery/${userId}`);
+        if (!isMounted) return;
+
+        setGalleryItems(normalizeGalleryItems(response));
+      } catch (error) {
+        if (!isMounted) return;
+
+        setGalleryItems([]);
+        toggleNotification({
+          type: 'warning',
+          message: error?.message || 'Failed to load signed gallery images.',
+        });
+      } finally {
+        if (isMounted) {
+          setIsGalleryLoading(false);
+        }
+      }
+    };
+
+    loadGallery();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [get, toggleNotification, userId]);
 
   if (!isAppUser) return null;
 
@@ -158,8 +256,21 @@ const AppUserPanel = () => {
           Open User Images (S3)
         </Button>
 
+        <Box>
+          <Typography variant="omega" textColor="neutral600">
+            Signed Gallery Preview
+          </Typography>
+          {isGalleryLoading ? (
+            <Typography variant="omega" textColor="neutral500">
+              Loading gallery images...
+            </Typography>
+          ) : (
+            <GalleryPreview items={galleryItems} />
+          )}
+        </Box>
+
         <Typography variant="omega" textColor="neutral500">
-          Opens Contacts filtered by this user and the user's S3 image folder.
+          Opens Contacts filtered by this user, the user's S3 image folder, and shows signed gallery previews.
         </Typography>
       </Flex>
     </Box>
