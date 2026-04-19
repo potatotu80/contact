@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { ExternalLink } from '@strapi/icons';
-import { useCMEditViewDataManager, useFetchClient } from '@strapi/helper-plugin';
+import { useCMEditViewDataManager, useFetchClient, useNotification } from '@strapi/helper-plugin';
+import { useRouteMatch } from 'react-router-dom';
 
 const APP_USER_UID = 'api::app-user.app-user';
 const CONTACT_UID = 'api::contact.contact';
@@ -43,10 +44,37 @@ const buildCollectionTypeListUrl = (slug, queryParams = {}) => {
   return url.toString();
 };
 
+const fetchAllEntryIds = async (get, slug) => {
+  const pageSize = 100;
+  let page = 1;
+  let pageCount = 1;
+  const ids = [];
+
+  do {
+    const response = await get(`/content-manager/collection-types/${slug}`, {
+      params: {
+        page,
+        pageSize,
+      },
+    });
+
+    const items = response?.data?.results || response?.data || [];
+    items.forEach((item) => {
+      if (item?.id) {
+        ids.push(item.id);
+      }
+    });
+
+    const pagination = response?.pagination || response?.data?.pagination;
+    pageCount = pagination?.pageCount || 1;
+    page += 1;
+  } while (page <= pageCount);
+
+  return ids;
+};
+
 const AppUserPanel = () => {
   const { slug, initialData } = useCMEditViewDataManager();
-  const [isDeleting, setIsDeleting] = useState(false);
-  const { del } = useFetchClient();
 
   const isAppUser = slug === APP_USER_UID;
   const userId = initialData?.id;
@@ -79,26 +107,6 @@ const AppUserPanel = () => {
   const openUserImages = () => {
     if (!userImagesUrl) return;
     window.open(userImagesUrl, '_blank', 'noopener,noreferrer');
-  };
-
-  const clearUser = async () => {
-    if (!userId || isDeleting) return;
-
-    const confirmed = window.confirm(
-      'Clear this User? This will also delete all Contacts for the user, the local profile image, and all S3 gallery images under this user.'
-    );
-    if (!confirmed) return;
-
-    try {
-      setIsDeleting(true);
-      await del(`/content-manager/collection-types/${APP_USER_UID}/${userId}`);
-      window.location.assign(buildCollectionTypeListUrl(APP_USER_UID));
-    } catch (error) {
-      const message = error?.message || 'Failed to clear User.';
-      window.alert(message);
-    } finally {
-      setIsDeleting(false);
-    }
   };
 
   return (
@@ -150,80 +158,69 @@ const AppUserPanel = () => {
           Open User Images (S3)
         </Button>
 
-        <Button
-          variant="danger-light"
-          size="S"
-          onClick={clearUser}
-          disabled={!userId || isDeleting}
-          fullWidth
-        >
-          {isDeleting ? 'Clearing User...' : 'Clear User'}
-        </Button>
-
         <Typography variant="omega" textColor="neutral500">
-          Opens Contacts filtered by this user, the user's S3 image folder, or clears the user and related data.
+          Opens Contacts filtered by this user and the user's S3 image folder.
         </Typography>
       </Flex>
     </Box>
   );
 };
 
-const ContactPanel = () => {
-  const { slug, initialData } = useCMEditViewDataManager();
-  const [isDeleting, setIsDeleting] = useState(false);
-  const { del } = useFetchClient();
+const BulkClearActions = () => {
+  const [isClearing, setIsClearing] = useState(false);
+  const { get, del } = useFetchClient();
+  const toggleNotification = useNotification();
+  const userMatch = useRouteMatch('/content-manager/collectionType/api::app-user.app-user');
+  const contactMatch = useRouteMatch('/content-manager/collectionType/api::contact.contact');
 
-  const isContact = slug === CONTACT_UID;
-  const contactId = initialData?.id;
+  const slug = userMatch ? APP_USER_UID : contactMatch ? CONTACT_UID : null;
+  if (!slug) return null;
 
-  if (!isContact) return null;
+  const isUserList = slug === APP_USER_UID;
+  const label = isUserList ? 'Clear All Users' : 'Clear All Contacts';
+  const confirmText = isUserList
+    ? 'Clear ALL Users? This will also delete all related Contacts, local profile images, and the users\' S3 gallery images.'
+    : 'Clear ALL Contacts?';
 
-  const clearContact = async () => {
-    if (!contactId || isDeleting) return;
+  const clearAllEntries = async () => {
+    if (isClearing) return;
 
-    const confirmed = window.confirm('Clear this Contact?');
+    const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
 
     try {
-      setIsDeleting(true);
-      await del(`/content-manager/collection-types/${CONTACT_UID}/${contactId}`);
-      window.location.assign(buildCollectionTypeListUrl(CONTACT_UID));
+      setIsClearing(true);
+      const ids = await fetchAllEntryIds(get, slug);
+
+      for (const id of ids) {
+        await del(`/content-manager/collection-types/${slug}/${id}`);
+      }
+
+      toggleNotification({
+        type: 'success',
+        message: `${label} completed.`,
+      });
+      window.location.assign(buildCollectionTypeListUrl(slug));
     } catch (error) {
-      const message = error?.message || 'Failed to clear Contact.';
-      window.alert(message);
+      const message = error?.message || `Failed to run ${label}.`;
+      toggleNotification({
+        type: 'warning',
+        message,
+      });
     } finally {
-      setIsDeleting(false);
+      setIsClearing(false);
     }
   };
 
   return (
-    <Box
-      background="neutral0"
-      borderColor="neutral200"
-      hasRadius
-      padding={4}
-      shadow="tableShadow"
+    <Button
+      variant="danger-light"
+      size="S"
+      onClick={clearAllEntries}
+      disabled={isClearing}
     >
-      <Flex direction="column" gap={3}>
-        <Typography variant="pi" textColor="neutral600">
-          Contact Actions
-        </Typography>
-
-        <Button
-          variant="danger-light"
-          size="S"
-          onClick={clearContact}
-          disabled={!contactId || isDeleting}
-          fullWidth
-        >
-          {isDeleting ? 'Clearing Contact...' : 'Clear Contact'}
-        </Button>
-
-        <Typography variant="omega" textColor="neutral500">
-          Removes this Contact entry from the database.
-        </Typography>
-      </Flex>
-    </Box>
+      {isClearing ? `${label}...` : label}
+    </Button>
   );
 };
 
@@ -237,9 +234,9 @@ const bootstrap = (app) => {
     Component: AppUserPanel,
   });
 
-  app.injectContentManagerComponent('editView', 'right-links', {
-    name: 'contact-panel',
-    Component: ContactPanel,
+  app.injectContentManagerComponent('listView', 'actions', {
+    name: 'bulk-clear-actions',
+    Component: BulkClearActions,
   });
 };
 
