@@ -200,6 +200,7 @@ After deployment:
 
 - `https://api.yengsang.com/api/app-users`
 - `https://cmsportal.yengsang.com/admin`
+- `https://cmsportal.yengsang.com/privacy_policy`
 - `POST https://api.yengsang.com/api/s3/presign`
 
 The API and admin UI are served by the same Strapi process, but Nginx separates the public API hostname from the admin hostname.

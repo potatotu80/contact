@@ -28,6 +28,7 @@ Custom collection endpoints:
 - `GET/PUT/DELETE /api/contacts/:id`
 - `POST /api/s3/presign`
 - `GET /app-user-gallery/:id` (admin-authenticated signed read URLs for S3 gallery preview)
+- `GET /privacy_policy` (public privacy policy page)
 
 `app-users` is used for the route path to avoid conflicting with Strapi's built-in `users-permissions` plugin routes under `/api/users`.
 
@@ -59,6 +60,12 @@ GET /app-user-gallery/:id
 ```
 
 This endpoint is restricted to authenticated Strapi admin users and avoids making the S3 bucket public.
+
+The public privacy policy page is available at:
+
+```text
+https://cmsportal.yengsang.com/privacy_policy
+```
 
 ## Run Locally
 

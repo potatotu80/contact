@@ -18,6 +18,251 @@ const buildS3ObjectUrl = (bucket, region, key) => {
   return `https://${bucket}.s3.${region}.amazonaws.com/${encodedKey}`;
 };
 
+const escapeHtml = (value) => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#39;');
+
+const PRIVACY_POLICY_SECTIONS = [
+  {
+    title: '1. Information We Collect',
+    paragraphs: [
+      'The app may collect the following information with user permission:',
+    ],
+    items: [
+      'Contacts: to allow users to access and manage their contact list within the app',
+      'Photos/Media: to allow users to select and upload images',
+      'Basic device information (e.g. device ID) for app functionality',
+    ],
+    closing: 'We only access this data after the user grants explicit permission.',
+  },
+  {
+    title: '2. How We Use Information',
+    paragraphs: [
+      'We use the collected information to:',
+    ],
+    items: [
+      'Provide and improve app functionality',
+      'Enable features such as contact management and media uploads',
+      'Store selected data securely on our servers',
+    ],
+    closing: 'We do not sell or share user data with third parties for marketing purposes.',
+  },
+  {
+    title: '3. Data Storage and Security',
+    paragraphs: [
+      'User data may be stored on secure servers, including cloud services. We take reasonable measures to protect data from unauthorized access, loss, or misuse.',
+    ],
+  },
+  {
+    title: '4. User Control',
+    paragraphs: [
+      'Users can:',
+    ],
+    items: [
+      'Grant or revoke permissions at any time through device settings',
+      'Stop using the app to prevent further data collection',
+    ],
+  },
+  {
+    title: '5. Third-Party Services',
+    paragraphs: [
+      'The app may use third-party services (e.g. cloud storage providers) to store and process data.',
+    ],
+  },
+  {
+    title: '6. Changes to This Policy',
+    paragraphs: [
+      'We may update this Privacy Policy from time to time. Updates will be reflected within the app.',
+    ],
+  },
+  {
+    title: '7. Contact',
+    paragraphs: [
+      'If you have any questions, please contact us at:',
+      'support@memberreward.com',
+    ],
+  },
+];
+
+const renderPrivacyPolicyHtml = () => {
+  const renderedSections = PRIVACY_POLICY_SECTIONS.map((section) => {
+    const paragraphs = (section.paragraphs || [])
+      .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+      .join('');
+
+    const items = section.items?.length
+      ? `<ul>${section.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>`
+      : '';
+
+    const closing = section.closing
+      ? `<p>${escapeHtml(section.closing)}</p>`
+      : '';
+
+    return `
+      <section>
+        <h2>${escapeHtml(section.title)}</h2>
+        ${paragraphs}
+        ${items}
+        ${closing}
+      </section>
+    `;
+  }).join('');
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Policy | Member Reward</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f7fb;
+        --card: #ffffff;
+        --text: #172033;
+        --muted: #5f6b85;
+        --accent: #2952ff;
+        --border: #d9dfeb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background:
+          radial-gradient(circle at top right, rgba(41, 82, 255, 0.12), transparent 28%),
+          linear-gradient(180deg, #f8faff 0%, var(--bg) 100%);
+        color: var(--text);
+      }
+
+      main {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 48px 20px 72px;
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        box-shadow: 0 20px 48px rgba(25, 42, 89, 0.08);
+        overflow: hidden;
+      }
+
+      header {
+        padding: 36px 32px 24px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent);
+        font-weight: 700;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(32px, 4vw, 44px);
+        line-height: 1.05;
+      }
+
+      .intro {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.7;
+        max-width: 64ch;
+      }
+
+      .content {
+        padding: 8px 32px 32px;
+      }
+
+      section {
+        padding-top: 24px;
+      }
+
+      h2 {
+        margin: 0 0 12px;
+        font-size: 22px;
+        line-height: 1.25;
+      }
+
+      p, li {
+        font-size: 16px;
+        line-height: 1.75;
+        color: var(--text);
+      }
+
+      p {
+        margin: 0 0 12px;
+      }
+
+      ul {
+        margin: 0 0 12px 22px;
+        padding: 0;
+      }
+
+      li + li {
+        margin-top: 8px;
+      }
+
+      footer {
+        padding: 0 32px 32px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      @media (max-width: 640px) {
+        header,
+        .content,
+        footer {
+          padding-left: 20px;
+          padding-right: 20px;
+        }
+
+        main {
+          padding-top: 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <article class="card">
+        <header>
+          <p class="eyebrow">Member Reward</p>
+          <h1>Privacy Policy</h1>
+          <p class="intro">
+            This Privacy Policy describes how Member Reward ("we", "our", or "the app")
+            collects, uses, and protects user information.
+          </p>
+        </header>
+        <div class="content">
+          ${renderedSections}
+        </div>
+        <footer>
+          For support, email <a href="mailto:support@memberreward.com">support@memberreward.com</a>.
+        </footer>
+      </article>
+    </main>
+  </body>
+</html>`;
+};
+
 module.exports = {
   /**
    * An asynchronous register function that runs before
@@ -27,6 +272,17 @@ module.exports = {
    */
   register({ strapi }) {
     strapi.server.routes([
+      {
+        method: 'GET',
+        path: '/privacy_policy',
+        handler: async (ctx) => {
+          ctx.type = 'text/html; charset=utf-8';
+          ctx.body = renderPrivacyPolicyHtml();
+        },
+        config: {
+          auth: false,
+        },
+      },
       {
         method: 'GET',
         path: '/app-user-gallery/:id',
