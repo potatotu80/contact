@@ -79,6 +79,22 @@ const deleteLocalUserImages = async (userId) => {
   await fs.rm(targetDir, { recursive: true, force: true });
 };
 
+const deleteRelatedContacts = async (userId) => {
+  const contacts = await strapi.entityService.findMany(CONTACT_UID, {
+    filters: {
+      user: {
+        id: userId,
+      },
+    },
+    fields: ['id'],
+    limit: 10000,
+  });
+
+  for (const contact of contacts) {
+    await strapi.entityService.delete(CONTACT_UID, contact.id);
+  }
+};
+
 module.exports = {
   async beforeDelete(event) {
     const userId = extractDeleteId(event.params?.where);
@@ -86,13 +102,6 @@ module.exports = {
 
     await deleteS3Prefix(userId);
     await deleteLocalUserImages(userId);
-
-    await strapi.db.query(CONTACT_UID).deleteMany({
-      where: {
-        user: {
-          id: userId,
-        },
-      },
-    });
+    await deleteRelatedContacts(userId);
   },
 };
