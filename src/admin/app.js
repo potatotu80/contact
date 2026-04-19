@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { ExternalLink } from '@strapi/icons';
 import { useCMEditViewDataManager, useFetchClient, useNotification } from '@strapi/helper-plugin';
-import { useRouteMatch } from 'react-router-dom';
 
 const APP_USER_UID = 'api::app-user.app-user';
 const CONTACT_UID = 'api::contact.contact';
@@ -166,15 +165,12 @@ const AppUserPanel = () => {
   );
 };
 
-const BulkClearActions = () => {
+const BulkClearActions = ({ slug }) => {
   const [isClearing, setIsClearing] = useState(false);
   const { get, del } = useFetchClient();
   const toggleNotification = useNotification();
-  const userMatch = useRouteMatch('/content-manager/collectionType/api::app-user.app-user');
-  const contactMatch = useRouteMatch('/content-manager/collectionType/api::contact.contact');
-
-  const slug = userMatch ? APP_USER_UID : contactMatch ? CONTACT_UID : null;
-  if (!slug) return null;
+  const isSupportedList = slug === APP_USER_UID || slug === CONTACT_UID;
+  if (!isSupportedList) return null;
 
   const isUserList = slug === APP_USER_UID;
   const label = isUserList ? 'Clear All Users' : 'Clear All Contacts';
