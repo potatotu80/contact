@@ -36,6 +36,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     const pageSize = Math.max(1, Math.min(100, Number(ctx.query.pageSize) || 25));
     const start = (page - 1) * pageSize;
     const sort = ctx.query.sort || ['name:asc'];
+    const phone = typeof ctx.query.phone === 'string' ? ctx.query.phone.trim() : '';
 
     if (Number.isNaN(userId)) {
       return ctx.badRequest('User id must be a valid number.');
@@ -52,6 +53,12 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
         id: userId,
       },
     };
+
+    if (phone) {
+      where.phone = {
+        $eq: phone,
+      };
+    }
 
     const [contacts, total] = await Promise.all([
       strapi.entityService.findMany('api::contact.contact', {
