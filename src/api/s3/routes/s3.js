@@ -7,6 +7,7 @@ module.exports = {
       path: '/s3/presign',
       handler: 's3.presign',
       config: {
+        auth: false,
         policies: ['global::app-api-key'],
         middlewares: [],
       },
