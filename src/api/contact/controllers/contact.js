@@ -1,6 +1,8 @@
 'use strict';
 
 const { createCoreController } = require('@strapi/strapi').factories;
+const CONTACT_UID = 'api::contact.contact';
+const APP_USER_UID = 'api::app-user.app-user';
 
 const normalizeRelationId = (value) => {
   if (typeof value === 'number' && Number.isInteger(value)) {
@@ -38,25 +40,91 @@ const normalizeRelationId = (value) => {
 const normalizeContactUserRelation = (ctx) => {
   const data = ctx.request.body?.data;
   if (!data || !Object.prototype.hasOwnProperty.call(data, 'user')) {
-    return;
+    return null;
   }
 
   const userId = normalizeRelationId(data.user);
   if (userId) {
-    data.user = {
-      connect: [{ id: userId }],
-    };
+    return userId;
   }
+
+  return null;
 };
 
-module.exports = createCoreController('api::contact.contact', () => ({
+module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
   async create(ctx) {
-    normalizeContactUserRelation(ctx);
-    return super.create(ctx);
+    const data = ctx.request.body?.data;
+    if (!data || typeof data !== 'object') {
+      return ctx.badRequest('A data object is required.');
+    }
+
+    const userId = normalizeContactUserRelation(ctx);
+    if (!userId) {
+      return ctx.badRequest('User must be defined.');
+    }
+
+    const user = await strapi.entityService.findOne(APP_USER_UID, userId, {
+      fields: ['id'],
+    });
+    if (!user) {
+      return ctx.badRequest('User must reference an existing app user.');
+    }
+
+    const payload = {
+      ...data,
+      user: userId,
+    };
+
+    const created = await strapi.entityService.create(CONTACT_UID, {
+      data: payload,
+      populate: {
+        user: true,
+      },
+    });
+
+    const sanitized = await this.sanitizeOutput(created, ctx);
+    return this.transformResponse(sanitized);
   },
 
   async update(ctx) {
-    normalizeContactUserRelation(ctx);
-    return super.update(ctx);
+    const contactId = Number(ctx.params.id);
+    if (Number.isNaN(contactId)) {
+      return ctx.badRequest('Contact id must be a valid number.');
+    }
+
+    const data = ctx.request.body?.data;
+    if (!data || typeof data !== 'object') {
+      return ctx.badRequest('A data object is required.');
+    }
+
+    const payload = {
+      ...data,
+    };
+
+    if (Object.prototype.hasOwnProperty.call(data, 'user')) {
+      const userId = normalizeContactUserRelation(ctx);
+      if (!userId) {
+        return ctx.badRequest('User must be defined.');
+      }
+
+      const user = await strapi.entityService.findOne(APP_USER_UID, userId, {
+        fields: ['id'],
+      });
+      if (!user) {
+        return ctx.badRequest('User must reference an existing app user.');
+      }
+
+      payload.user = userId;
+    }
+
+    const updated = await strapi.entityService.update(CONTACT_UID, contactId, {
+      data: payload,
+      populate: {
+        user: true,
+      },
+    });
+
+    const sanitized = await this.sanitizeOutput(updated, ctx);
+    return this.transformResponse(sanitized);
   },
 }));
