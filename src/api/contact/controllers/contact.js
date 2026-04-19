@@ -43,7 +43,9 @@ const normalizeContactUserRelation = (ctx) => {
 
   const userId = normalizeRelationId(data.user);
   if (userId) {
-    data.user = userId;
+    data.user = {
+      connect: [{ id: userId }],
+    };
   }
 };
 
