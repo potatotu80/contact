@@ -161,7 +161,7 @@ const AppUserPanel = () => {
 
       try {
         setIsGalleryLoading(true);
-        const response = await get(`/admin/app-user-gallery/${userId}`);
+        const response = await get(`/app-user-gallery/${userId}`);
         if (!isMounted) return;
 
         setGalleryItems(normalizeGalleryItems(response));

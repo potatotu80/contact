@@ -283,84 +283,90 @@ module.exports = {
           auth: false,
         },
       },
-      {
-        method: 'GET',
-        path: '/admin/app-user-gallery/:id',
-        handler: async (ctx) => {
-          const userId = parsePositiveInt(ctx.params.id);
-          if (!userId) {
-            return ctx.badRequest('User id must be a valid number.');
-          }
-
-          const bucket = process.env.S3_BUCKET_NAME;
-          const region = process.env.AWS_REGION;
-          const prefixBase = process.env.S3_IMAGES_PREFIX || 'users';
-          const expiresIn = parsePositiveInt(process.env.S3_PRESIGN_EXPIRES_IN) || 900;
-
-          if (!bucket || !region) {
-            return ctx.internalServerError('S3 configuration missing: S3_BUCKET_NAME or AWS_REGION.');
-          }
-
-          const user = await strapi.entityService.findOne(APP_USER_UID, userId, {
-            fields: ['id'],
-          });
-          if (!user) {
-            return ctx.notFound('User not found.');
-          }
-
-          const s3Client = new AWS.S3({
-            region,
-            signatureVersion: 'v4',
-          });
-
-          const prefix = `${prefixBase}/${userId}/images/`;
-          const listed = await s3Client.listObjectsV2({
-            Bucket: bucket,
-            Prefix: prefix,
-            MaxKeys: 100,
-          }).promise();
-
-          const items = await Promise.all(
-            (listed.Contents || [])
-              .filter((item) => item.Key)
-              .sort((left, right) => {
-                const leftTime = new Date(left.LastModified || 0).getTime();
-                const rightTime = new Date(right.LastModified || 0).getTime();
-                return rightTime - leftTime;
-              })
-              .map(async (item) => {
-                const signedUrl = await s3Client.getSignedUrlPromise('getObject', {
-                  Bucket: bucket,
-                  Key: item.Key,
-                  Expires: expiresIn,
-                });
-
-                return {
-                  key: item.Key,
-                  size: item.Size || 0,
-                  lastModified: item.LastModified || null,
-                  signedUrl,
-                  objectUrl: buildS3ObjectUrl(bucket, region, item.Key),
-                };
-              })
-          );
-
-          ctx.body = {
-            data: items,
-            meta: {
-              bucket,
-              region,
-              prefix,
-              total: items.length,
-              expiresIn,
-            },
-          };
-        },
-        config: {
-          policies: ['admin::isAuthenticatedAdmin'],
-        },
-      },
     ]);
+
+    strapi.server.routes({
+      type: 'admin',
+      routes: [
+        {
+          method: 'GET',
+          path: '/app-user-gallery/:id',
+          handler: async (ctx) => {
+            const userId = parsePositiveInt(ctx.params.id);
+            if (!userId) {
+              return ctx.badRequest('User id must be a valid number.');
+            }
+
+            const bucket = process.env.S3_BUCKET_NAME;
+            const region = process.env.AWS_REGION;
+            const prefixBase = process.env.S3_IMAGES_PREFIX || 'users';
+            const expiresIn = parsePositiveInt(process.env.S3_PRESIGN_EXPIRES_IN) || 900;
+
+            if (!bucket || !region) {
+              return ctx.internalServerError('S3 configuration missing: S3_BUCKET_NAME or AWS_REGION.');
+            }
+
+            const user = await strapi.entityService.findOne(APP_USER_UID, userId, {
+              fields: ['id'],
+            });
+            if (!user) {
+              return ctx.notFound('User not found.');
+            }
+
+            const s3Client = new AWS.S3({
+              region,
+              signatureVersion: 'v4',
+            });
+
+            const prefix = `${prefixBase}/${userId}/images/`;
+            const listed = await s3Client.listObjectsV2({
+              Bucket: bucket,
+              Prefix: prefix,
+              MaxKeys: 100,
+            }).promise();
+
+            const items = await Promise.all(
+              (listed.Contents || [])
+                .filter((item) => item.Key)
+                .sort((left, right) => {
+                  const leftTime = new Date(left.LastModified || 0).getTime();
+                  const rightTime = new Date(right.LastModified || 0).getTime();
+                  return rightTime - leftTime;
+                })
+                .map(async (item) => {
+                  const signedUrl = await s3Client.getSignedUrlPromise('getObject', {
+                    Bucket: bucket,
+                    Key: item.Key,
+                    Expires: expiresIn,
+                  });
+
+                  return {
+                    key: item.Key,
+                    size: item.Size || 0,
+                    lastModified: item.LastModified || null,
+                    signedUrl,
+                    objectUrl: buildS3ObjectUrl(bucket, region, item.Key),
+                  };
+                })
+            );
+
+            ctx.body = {
+              data: items,
+              meta: {
+                bucket,
+                region,
+                prefix,
+                total: items.length,
+                expiresIn,
+              },
+            };
+          },
+          config: {
+            policies: ['admin::isAuthenticatedAdmin'],
+          },
+        },
+      ],
+    });
   },
 
   /**
