@@ -27,6 +27,7 @@ Custom collection endpoints:
 - `GET/POST /api/contacts`
 - `GET/PUT/DELETE /api/contacts/:id`
 - `POST /api/s3/presign`
+- `GET /app-user-gallery/:id` (admin-authenticated signed read URLs for S3 gallery preview)
 
 `app-users` is used for the route path to avoid conflicting with Strapi's built-in `users-permissions` plugin routes under `/api/users`.
 
@@ -50,6 +51,14 @@ The returned upload URL stores files under:
 ```text
 users/<userId>/images/
 ```
+
+For the Strapi admin UI, private S3 gallery images can be previewed from the User edit page through signed read URLs returned by:
+
+```text
+GET /app-user-gallery/:id
+```
+
+This endpoint is restricted to authenticated Strapi admin users and avoids making the S3 bucket public.
 
 ## Run Locally
 

@@ -107,7 +107,7 @@ Attach an IAM policy like this to the EC2 instance role:
       "Resource": "arn:aws:s3:::yengtesting/users/*"
     },
     {
-      "Sid": "AllowReadForValidationOptional",
+      "Sid": "AllowReadObjectsForSignedUrls",
       "Effect": "Allow",
       "Action": [
         "s3:GetObject"
@@ -203,6 +203,12 @@ After deployment:
 - `POST https://api.yengsang.com/api/s3/presign`
 
 The API and admin UI are served by the same Strapi process, but Nginx separates the public API hostname from the admin hostname.
+
+For private gallery viewing inside Strapi admin, the backend now generates signed read URLs on demand. That means:
+
+- your bucket does not need public-read access
+- the EC2 IAM role must keep `s3:GetObject`
+- Strapi admin users can preview S3 gallery images from the User edit page
 
 For a quick presign test in production:
 
