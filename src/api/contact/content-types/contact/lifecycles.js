@@ -14,6 +14,14 @@ const extractUserId = (userValue) => {
   if (typeof userValue === 'object') {
     if (typeof userValue.id === 'number') return userValue.id;
 
+    if (userValue.data) {
+      return extractUserId(userValue.data);
+    }
+
+    if (Array.isArray(userValue.connect) && userValue.connect.length > 0) {
+      return extractUserId(userValue.connect[0]);
+    }
+
     if (Array.isArray(userValue.connect) && userValue.connect[0]?.id) {
       return Number(userValue.connect[0].id);
     }
