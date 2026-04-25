@@ -1,11 +1,16 @@
 'use strict';
 
 const fs = require('fs/promises');
+const https = require('https');
 const path = require('path');
 const crypto = require('crypto');
 const { createCoreController } = require('@strapi/strapi').factories;
 
 const APP_USER_UID = 'api::app-user.app-user';
+const OTP_ATTEMPT_UID = 'api::otp-attempt.otp-attempt';
+const OTP_WINDOW_MS = 10 * 60 * 1000;
+const SEND_OTP_LIMIT = 3;
+const VERIFY_OTP_LIMIT = 5;
 
 const sanitizeSegment = (value, fallback) => {
   const normalized = (value || fallback).trim().replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -29,7 +34,258 @@ const buildPublicFileUrl = (relativePath) => {
   return publicUrl ? `${publicUrl}${relativePath}` : relativePath;
 };
 
+const normalizePhone = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const compact = trimmed.replace(/[\s()-]/g, '');
+  const withPlus = compact.startsWith('00') ? `+${compact.slice(2)}` : compact;
+  return withPlus;
+};
+
+const isValidE164Phone = (value) => /^\+[1-9]\d{7,14}$/.test(value);
+
+const getTwilioConfig = () => ({
+  accountSid: (process.env.TWILIO_ACCOUNT_SID || '').trim(),
+  authToken: (process.env.TWILIO_AUTH_TOKEN || '').trim(),
+  verifyServiceSid: (process.env.TWILIO_VERIFY_SERVICE_SID || '').trim(),
+});
+
+const assertTwilioConfigured = () => {
+  const config = getTwilioConfig();
+
+  if (!config.accountSid || !config.authToken || !config.verifyServiceSid) {
+    const error = new Error('Twilio Verify is not configured.');
+    error.status = 500;
+    throw error;
+  }
+
+  return config;
+};
+
+const parseJson = (value) => {
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return null;
+  }
+};
+
+const callTwilioVerify = ({ path: requestPath, body, accountSid, authToken }) =>
+  new Promise((resolve, reject) => {
+    const encodedBody = new URLSearchParams(body).toString();
+
+    const request = https.request(
+      {
+        hostname: 'verify.twilio.com',
+        port: 443,
+        path: requestPath,
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': Buffer.byteLength(encodedBody),
+        },
+      },
+      (response) => {
+        let responseBody = '';
+
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+        response.on('end', () => {
+          resolve({
+            ok: response.statusCode >= 200 && response.statusCode < 300,
+            status: response.statusCode || 500,
+            body: responseBody,
+            json: parseJson(responseBody),
+          });
+        });
+      }
+    );
+
+    request.on('error', reject);
+    request.write(encodedBody);
+    request.end();
+  });
+
+const getLimitForAction = (action) => (action === 'send' ? SEND_OTP_LIMIT : VERIFY_OTP_LIMIT);
+
+const getAttemptCount = async (strapi, phone, action) => {
+  const since = new Date(Date.now() - OTP_WINDOW_MS).toISOString();
+
+  return strapi.db.query(OTP_ATTEMPT_UID).count({
+    where: {
+      phone,
+      action,
+      createdAt: {
+        $gte: since,
+      },
+    },
+  });
+};
+
+const recordAttempt = async (strapi, { phone, action, successful, status }) => {
+  await strapi.entityService.create(OTP_ATTEMPT_UID, {
+    data: {
+      phone,
+      action,
+      successful,
+      status,
+    },
+  });
+};
+
+const rejectTooManyAttempts = (ctx, action) => {
+  ctx.status = 429;
+  ctx.body = {
+    data: null,
+    error: {
+      status: 429,
+      name: 'TooManyRequestsError',
+      message:
+        action === 'send'
+          ? 'Too many OTP requests for this phone number. Please try again later.'
+          : 'Too many OTP verification attempts for this phone number. Please try again later.',
+      details: {},
+    },
+  };
+};
+
+const ensureOtpAllowed = async (ctx, strapi, phone, action) => {
+  const count = await getAttemptCount(strapi, phone, action);
+  if (count >= getLimitForAction(action)) {
+    rejectTooManyAttempts(ctx, action);
+    return false;
+  }
+
+  return true;
+};
+
+const extractTwilioErrorMessage = (payload, fallbackMessage) => {
+  if (payload && typeof payload.message === 'string' && payload.message.trim()) {
+    return payload.message.trim();
+  }
+
+  return fallbackMessage;
+};
+
 module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => ({
+  async sendOtp(ctx) {
+    const phone = normalizePhone(ctx.request.body?.phone);
+    if (!phone) {
+      return ctx.badRequest('Phone number is required.');
+    }
+
+    if (!isValidE164Phone(phone)) {
+      return ctx.badRequest('Phone number must be in international format, for example +60123456789.');
+    }
+
+    if (!(await ensureOtpAllowed(ctx, strapi, phone, 'send'))) {
+      return;
+    }
+
+    let config;
+    try {
+      config = assertTwilioConfigured();
+    } catch (error) {
+      strapi.log.error(error.message);
+      return ctx.internalServerError('Twilio Verify is not configured.');
+    }
+
+    const response = await callTwilioVerify({
+      path: `/v2/Services/${config.verifyServiceSid}/Verifications`,
+      body: {
+        To: phone,
+        Channel: 'sms',
+      },
+      accountSid: config.accountSid,
+      authToken: config.authToken,
+    });
+
+    const payload = response.json || {};
+    await recordAttempt(strapi, {
+      phone,
+      action: 'send',
+      successful: response.ok,
+      status: payload.status || String(response.status),
+    });
+
+    if (!response.ok) {
+      return ctx.badRequest(extractTwilioErrorMessage(payload, 'Unable to send OTP.'));
+    }
+
+    ctx.body = {
+      data: {
+        phone,
+        status: payload.status || 'pending',
+        channel: payload.channel || 'sms',
+      },
+    };
+  },
+
+  async verifyOtp(ctx) {
+    const phone = normalizePhone(ctx.request.body?.phone);
+    const code = String(ctx.request.body?.code || '').trim();
+
+    if (!phone) {
+      return ctx.badRequest('Phone number is required.');
+    }
+    if (!code) {
+      return ctx.badRequest('OTP code is required.');
+    }
+    if (!isValidE164Phone(phone)) {
+      return ctx.badRequest('Phone number must be in international format, for example +60123456789.');
+    }
+
+    if (!(await ensureOtpAllowed(ctx, strapi, phone, 'verify'))) {
+      return;
+    }
+
+    let config;
+    try {
+      config = assertTwilioConfigured();
+    } catch (error) {
+      strapi.log.error(error.message);
+      return ctx.internalServerError('Twilio Verify is not configured.');
+    }
+
+    const response = await callTwilioVerify({
+      path: `/v2/Services/${config.verifyServiceSid}/VerificationCheck`,
+      body: {
+        To: phone,
+        Code: code,
+      },
+      accountSid: config.accountSid,
+      authToken: config.authToken,
+    });
+
+    const payload = response.json || {};
+    const approved = response.ok && payload.status === 'approved';
+
+    await recordAttempt(strapi, {
+      phone,
+      action: 'verify',
+      successful: approved,
+      status: payload.status || String(response.status),
+    });
+
+    if (!approved) {
+      return ctx.badRequest(extractTwilioErrorMessage(payload, 'Invalid or expired OTP code.'));
+    }
+
+    ctx.body = {
+      data: {
+        phone,
+        phoneVerified: true,
+        status: payload.status,
+      },
+    };
+  },
+
   async contacts(ctx) {
     const userId = Number(ctx.params.id);
     const page = Math.max(1, Number(ctx.query.page) || 1);
@@ -141,7 +397,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       data: {
         image_url: imageUrl,
       },
-      fields: ['id', 'email', 'phone', 'ic_number', 'device_id', 'image_url'],
+      fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
     });
 
     const sanitizedUser = await this.sanitizeOutput(updatedUser, ctx);

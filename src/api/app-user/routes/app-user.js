@@ -30,6 +30,26 @@ const defaultRouter = createCoreRouter('api::app-user.app-user', {
 const customRouter = {
   routes: [
     {
+      method: 'POST',
+      path: '/phone-verification/send-otp',
+      handler: 'app-user.sendOtp',
+      config: {
+        auth: false,
+        policies: ['global::app-api-key'],
+        middlewares: [],
+      },
+    },
+    {
+      method: 'POST',
+      path: '/phone-verification/verify-otp',
+      handler: 'app-user.verifyOtp',
+      config: {
+        auth: false,
+        policies: ['global::app-api-key'],
+        middlewares: [],
+      },
+    },
+    {
       method: 'GET',
       path: '/app-users/:id/contacts',
       handler: 'app-user.contacts',

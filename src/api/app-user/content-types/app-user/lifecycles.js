@@ -6,7 +6,7 @@ const AWS = require('aws-sdk');
 
 const CONTACT_UID = 'api::contact.contact';
 
-const extractDeleteId = (where) => {
+const extractEntityId = (where) => {
   if (!where) return null;
 
   if (typeof where.id === 'number') return where.id;
@@ -24,6 +24,10 @@ const extractDeleteId = (where) => {
   }
 
   return null;
+};
+
+const extractDeleteId = (where) => {
+  return extractEntityId(where);
 };
 
 const deleteS3Prefix = async (userId) => {
@@ -96,6 +100,43 @@ const deleteRelatedContacts = async (userId) => {
 };
 
 module.exports = {
+  async beforeCreate(event) {
+    const data = event.params?.data;
+    if (!data) return;
+
+    if (Object.prototype.hasOwnProperty.call(data, 'phone') &&
+        !Object.prototype.hasOwnProperty.call(data, 'phoneVerified')) {
+      data.phoneVerified = false;
+    }
+  },
+
+  async beforeUpdate(event) {
+    const data = event.params?.data;
+    if (!data || !Object.prototype.hasOwnProperty.call(data, 'phone')) {
+      return;
+    }
+
+    if (data.phoneVerified === true) {
+      return;
+    }
+
+    const userId = extractEntityId(event.params?.where);
+    if (!userId) {
+      return;
+    }
+
+    const existingUser = await strapi.entityService.findOne('api::app-user.app-user', userId, {
+      fields: ['phone'],
+    });
+
+    const nextPhone = typeof data.phone === 'string' ? data.phone.trim() : data.phone;
+    const currentPhone = typeof existingUser?.phone === 'string' ? existingUser.phone.trim() : existingUser?.phone;
+
+    if (nextPhone !== currentPhone) {
+      data.phoneVerified = false;
+    }
+  },
+
   async beforeDelete(event) {
     const userId = extractDeleteId(event.params?.where);
     if (!userId) return;

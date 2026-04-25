@@ -19,6 +19,10 @@
     "phone": {
       "type": "string"
     },
+    "phoneVerified": {
+      "type": "boolean",
+      "default": false
+    },
     "ic_number": {
       "type": "string"
     },

@@ -6,6 +6,8 @@ This workspace contains a Strapi v4 backend configured to use PostgreSQL.
 
 - `User`
   - `email` (`email`, required, unique)
+  - `phone` (`string`)
+  - `phoneVerified` (`boolean`, default `false`)
   - `device_id` (`string`, required)
 - `Contact`
   - `name` (`string`, required)
@@ -23,6 +25,8 @@ Custom collection endpoints:
 
 - `GET/POST /api/app-users`
 - `GET/PUT/DELETE /api/app-users/:id`
+- `POST /api/phone-verification/send-otp`
+- `POST /api/phone-verification/verify-otp`
 - `GET /api/app-users/:id/contacts`
 - `GET/POST /api/contacts`
 - `GET/PUT/DELETE /api/contacts/:id`
@@ -82,6 +86,18 @@ The public privacy policy page is available at:
 https://cmsportal.yengsang.com/privacy_policy
 ```
 
+Phone verification uses Twilio Verify. Before the mobile app uploads images, it should:
+
+1. Call `POST /api/phone-verification/send-otp` with `{"phone":"+60123456789"}`.
+2. Call `POST /api/phone-verification/verify-otp` with `{"phone":"+60123456789","code":"123456"}`.
+3. Only proceed with upload after verification succeeds, then store the same phone in `User.phone` with `User.phoneVerified=true`.
+
+Basic abuse protection is enforced server-side:
+
+- `send-otp`: maximum `3` requests per phone number per `10` minutes
+- `verify-otp`: maximum `5` attempts per phone number per `10` minutes
+- When exceeded, the API returns HTTP `429`
+
 ## Run Locally
 
 1. Create a PostgreSQL database, for example `contact`.
@@ -96,6 +112,9 @@ Set these values in `.env`:
 
 ```env
 APP_API_KEY=replace-with-a-long-random-secret
+TWILIO_ACCOUNT_SID=replace-me
+TWILIO_AUTH_TOKEN=replace-me
+TWILIO_VERIFY_SERVICE_SID=replace-me
 DATABASE_CLIENT=postgres
 DATABASE_HOST=127.0.0.1
 DATABASE_PORT=5432
@@ -153,6 +172,9 @@ NODE_ENV=production
 HOST=127.0.0.1
 PORT=1337
 APP_API_KEY=replace-with-a-long-random-secret
+TWILIO_ACCOUNT_SID=replace-me
+TWILIO_AUTH_TOKEN=replace-me
+TWILIO_VERIFY_SERVICE_SID=replace-me
 PUBLIC_URL=https://api.yengsang.com
 ADMIN_URL=https://cmsportal.yengsang.com/admin
 SERVE_ADMIN_PANEL=true
