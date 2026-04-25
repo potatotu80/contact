@@ -50,6 +50,16 @@ const customRouter = {
       },
     },
     {
+      method: 'POST',
+      path: '/phone-verification/register-user',
+      handler: 'app-user.registerVerifiedUser',
+      config: {
+        auth: false,
+        policies: ['global::app-api-key'],
+        middlewares: [],
+      },
+    },
+    {
       method: 'GET',
       path: '/app-users/:id/contacts',
       handler: 'app-user.contacts',

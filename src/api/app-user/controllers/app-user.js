@@ -34,6 +34,15 @@ const buildPublicFileUrl = (relativePath) => {
   return publicUrl ? `${publicUrl}${relativePath}` : relativePath;
 };
 
+const sanitizeForEmailLocalPart = (value, fallback) => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return normalized || fallback;
+};
+
 const normalizePhone = (value) => {
   const trimmed = String(value || '').trim();
   if (!trimmed) {
@@ -173,6 +182,12 @@ const extractTwilioErrorMessage = (payload, fallbackMessage) => {
   return fallbackMessage;
 };
 
+const buildPendingEmail = (phone, deviceId) => {
+  const phonePart = sanitizeForEmailLocalPart(phone.replace(/^\+/, ''), 'phone');
+  const devicePart = sanitizeForEmailLocalPart(deviceId, 'device');
+  return `verified-${phonePart}-${devicePart}@pending.local`;
+};
+
 module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => ({
   async sendOtp(ctx) {
     const phone = normalizePhone(ctx.request.body?.phone);
@@ -284,6 +299,77 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
         status: payload.status,
       },
     };
+  },
+
+  async registerVerifiedUser(ctx) {
+    const phone = normalizePhone(ctx.request.body?.phone);
+    const deviceId = String(ctx.request.body?.deviceId || '').trim();
+
+    if (!phone) {
+      return ctx.badRequest('Phone number is required.');
+    }
+    if (!deviceId) {
+      return ctx.badRequest('Device id is required.');
+    }
+    if (!isValidE164Phone(phone)) {
+      return ctx.badRequest('Phone number must be in international format, for example +60123456789.');
+    }
+
+    const pendingEmail = buildPendingEmail(phone, deviceId);
+
+    const existingByDevice = await strapi.entityService.findMany(APP_USER_UID, {
+      filters: {
+        device_id: {
+          $eq: deviceId,
+        },
+      },
+      fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
+      limit: 1,
+    });
+
+    const existingByPhone = existingByDevice.length
+      ? []
+      : await strapi.entityService.findMany(APP_USER_UID, {
+          filters: {
+            phone: {
+              $eq: phone,
+            },
+          },
+          fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
+          limit: 1,
+        });
+
+    const existingUser = existingByDevice[0] || existingByPhone[0];
+
+    let user;
+
+    if (existingUser) {
+      user = await strapi.entityService.update(APP_USER_UID, existingUser.id, {
+        data: {
+          phone,
+          phoneVerified: true,
+          device_id: deviceId,
+          email: existingUser.email || pendingEmail,
+        },
+        fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
+      });
+    } else {
+      user = await strapi.entityService.create(APP_USER_UID, {
+        data: {
+          email: pendingEmail,
+          phone,
+          phoneVerified: true,
+          device_id: deviceId,
+        },
+        fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
+      });
+    }
+
+    const sanitizedUser = await this.sanitizeOutput(user, ctx);
+
+    return this.transformResponse(sanitizedUser, {
+      profileIncomplete: !user.ic_number || user.email.endsWith('@pending.local'),
+    });
   },
 
   async contacts(ctx) {
