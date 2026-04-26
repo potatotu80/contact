@@ -345,7 +345,7 @@ module.exports = {
           method: 'GET',
           path: '/twilio/voice/token',
           handler: async (ctx) => {
-            const adminUser = ctx.state?.admin?.user;
+            const adminUser = ctx.state?.admin?.user || ctx.state?.user || ctx.state?.adminUser;
             if (!adminUser?.id) {
               return ctx.unauthorized('Admin authentication is required.');
             }
