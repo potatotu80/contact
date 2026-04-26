@@ -1,6 +1,7 @@
 'use strict';
 
 const AWS = require('aws-sdk');
+const twilio = require('twilio');
 
 const APP_USER_UID = 'api::app-user.app-user';
 
@@ -16,6 +17,58 @@ const buildS3ObjectUrl = (bucket, region, key) => {
     .join('/');
 
   return `https://${bucket}.s3.${region}.amazonaws.com/${encodedKey}`;
+};
+
+const buildVoiceIdentity = (adminUser) => {
+  const prefix = (process.env.TWILIO_VOICE_IDENTITY_PREFIX || 'admin').trim() || 'admin';
+  return `${prefix}-${adminUser.id}`;
+};
+
+const getTwilioVoiceConfig = () => ({
+  accountSid: (process.env.TWILIO_ACCOUNT_SID || '').trim(),
+  apiKeySid: (process.env.TWILIO_VOICE_API_KEY_SID || '').trim(),
+  apiKeySecret: (process.env.TWILIO_VOICE_API_KEY_SECRET || '').trim(),
+  twimlAppSid: (process.env.TWILIO_VOICE_TWIML_APP_SID || '').trim(),
+  callerId: (process.env.TWILIO_VOICE_CALLER_ID || '').trim(),
+  tokenTtl: parsePositiveInt(process.env.TWILIO_VOICE_TOKEN_TTL) || 3600,
+});
+
+const createVoiceAccessToken = (adminUser) => {
+  const config = getTwilioVoiceConfig();
+
+  if (!config.accountSid || !config.apiKeySid || !config.apiKeySecret || !config.twimlAppSid || !config.callerId) {
+    throw new Error(
+      'Twilio Voice configuration is incomplete. Required: TWILIO_ACCOUNT_SID, ' +
+      'TWILIO_VOICE_API_KEY_SID, TWILIO_VOICE_API_KEY_SECRET, TWILIO_VOICE_TWIML_APP_SID, ' +
+      'TWILIO_VOICE_CALLER_ID.'
+    );
+  }
+
+  const AccessToken = twilio.jwt.AccessToken;
+  const VoiceGrant = AccessToken.VoiceGrant;
+  const token = new AccessToken(
+    config.accountSid,
+    config.apiKeySid,
+    config.apiKeySecret,
+    {
+      identity: buildVoiceIdentity(adminUser),
+      ttl: config.tokenTtl,
+    }
+  );
+
+  token.addGrant(
+    new VoiceGrant({
+      outgoingApplicationSid: config.twimlAppSid,
+      incomingAllow: false,
+    })
+  );
+
+  return {
+    token: token.toJwt(),
+    identity: buildVoiceIdentity(adminUser),
+    callerId: config.callerId,
+    expiresIn: config.tokenTtl,
+  };
 };
 
 const escapeHtml = (value) => String(value)
@@ -288,6 +341,28 @@ module.exports = {
     strapi.server.routes({
       type: 'admin',
       routes: [
+        {
+          method: 'GET',
+          path: '/twilio/voice/token',
+          handler: async (ctx) => {
+            const adminUser = ctx.state?.admin?.user;
+            if (!adminUser?.id) {
+              return ctx.unauthorized('Admin authentication is required.');
+            }
+
+            try {
+              ctx.body = {
+                data: createVoiceAccessToken(adminUser),
+              };
+            } catch (error) {
+              strapi.log.error(`[twilio-voice] ${error.message}`);
+              return ctx.internalServerError(error.message);
+            }
+          },
+          config: {
+            policies: ['admin::isAuthenticatedAdmin'],
+          },
+        },
         {
           method: 'GET',
           path: '/app-user-gallery/:id',

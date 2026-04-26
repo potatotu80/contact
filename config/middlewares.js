@@ -26,9 +26,9 @@ module.exports = [
       contentSecurityPolicy: {
         useDefaults: true,
         directives: {
-          'connect-src': ["'self'", 'https:', 'http:'],
+          'connect-src': ["'self'", 'https:', 'http:', 'wss:'],
           'img-src': ["'self'", 'data:', 'blob:', 'https:'],
-          'media-src': ["'self'", 'data:', 'blob:', 'https:'],
+          'media-src': ["'self'", 'data:', 'blob:', 'https:', 'mediastream:'],
           upgradeInsecureRequests: null,
         },
       },

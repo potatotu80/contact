@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { ExternalLink } from '@strapi/icons';
 import { useCMEditViewDataManager, useFetchClient, useNotification } from '@strapi/helper-plugin';
 import { useRouteMatch } from 'react-router-dom';
+import { Device } from '@twilio/voice-sdk';
 
 const APP_USER_UID = 'api::app-user.app-user';
 const CONTACT_UID = 'api::contact.contact';
@@ -42,6 +43,14 @@ const buildCollectionTypeListUrl = (slug, queryParams = {}) => {
   });
 
   return url.toString();
+};
+
+const normalizePhone = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+
+  const compact = trimmed.replace(/[\s()-]/g, '');
+  return compact.startsWith('00') ? `+${compact.slice(2)}` : compact;
 };
 
 const GalleryPreview = ({ items }) => {
@@ -278,6 +287,190 @@ const AppUserPanel = () => {
   );
 };
 
+const VoiceCallPanel = () => {
+  const { slug, initialData } = useCMEditViewDataManager();
+  const { get } = useFetchClient();
+  const toggleNotification = useNotification();
+  const deviceRef = useRef(null);
+  const callRef = useRef(null);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [isCalling, setIsCalling] = useState(false);
+  const [callStatus, setCallStatus] = useState('Ready to call');
+
+  const supportedSlug = slug === CONTACT_UID || slug === APP_USER_UID;
+  const phone = normalizePhone(initialData?.phone);
+
+  useEffect(() => () => {
+    callRef.current?.disconnect?.();
+    deviceRef.current?.destroy?.();
+  }, []);
+
+  if (!supportedSlug || !phone) return null;
+
+  const fetchVoiceToken = async () => {
+    const response = await get('/twilio/voice/token');
+    const payload = response?.data?.data || response?.data;
+    if (!payload?.token) {
+      throw new Error('Voice token response was missing a token.');
+    }
+
+    return payload.token;
+  };
+
+  const ensureDevice = async () => {
+    if (deviceRef.current) {
+      return deviceRef.current;
+    }
+
+    const token = await fetchVoiceToken();
+    const device = new Device(token, {
+      logLevel: 1,
+    });
+
+    device.on('registered', () => {
+      setCallStatus('Phone ready');
+    });
+
+    device.on('error', (error) => {
+      const message = error?.message || 'Twilio voice error';
+      setCallStatus(message);
+      setIsPreparing(false);
+      setIsCalling(false);
+      toggleNotification({
+        type: 'warning',
+        message,
+      });
+    });
+
+    device.on('tokenWillExpire', async () => {
+      try {
+        const nextToken = await fetchVoiceToken();
+        await device.updateToken(nextToken);
+      } catch (error) {
+        toggleNotification({
+          type: 'warning',
+          message: error?.message || 'Failed to refresh the Twilio voice token.',
+        });
+      }
+    });
+
+    await device.register();
+    deviceRef.current = device;
+    return device;
+  };
+
+  const startCall = async () => {
+    if (isPreparing || isCalling) return;
+
+    try {
+      setIsPreparing(true);
+      setCallStatus(`Preparing call to ${phone}...`);
+
+      const device = await ensureDevice();
+      const call = await device.connect({
+        params: {
+          To: phone,
+        },
+      });
+
+      callRef.current = call;
+      setIsCalling(true);
+      setCallStatus(`Calling ${phone}...`);
+
+      call.on('accept', () => {
+        setCallStatus(`Connected to ${phone}`);
+      });
+
+      call.on('disconnect', () => {
+        callRef.current = null;
+        setIsCalling(false);
+        setCallStatus('Call ended');
+      });
+
+      call.on('cancel', () => {
+        callRef.current = null;
+        setIsCalling(false);
+        setCallStatus('Call cancelled');
+      });
+
+      call.on('error', (error) => {
+        callRef.current = null;
+        setIsCalling(false);
+        const message = error?.message || 'Call failed';
+        setCallStatus(message);
+        toggleNotification({
+          type: 'warning',
+          message,
+        });
+      });
+    } catch (error) {
+      const message = error?.message || 'Failed to start the call.';
+      setCallStatus(message);
+      toggleNotification({
+        type: 'warning',
+        message,
+      });
+    } finally {
+      setIsPreparing(false);
+    }
+  };
+
+  const hangUp = () => {
+    callRef.current?.disconnect?.();
+  };
+
+  return (
+    <Box
+      background="neutral0"
+      borderColor="neutral200"
+      hasRadius
+      padding={4}
+      shadow="tableShadow"
+    >
+      <Flex direction="column" gap={3}>
+        <Typography variant="pi" textColor="neutral600">
+          Twilio Voice
+        </Typography>
+
+        <Box>
+          <Typography variant="omega" textColor="neutral600">
+            Target Number
+          </Typography>
+          <Typography variant="pi">{phone}</Typography>
+        </Box>
+
+        <Typography variant="omega" textColor="neutral500">
+          {callStatus}
+        </Typography>
+
+        <Button
+          variant="success"
+          size="S"
+          onClick={startCall}
+          disabled={isPreparing || isCalling}
+          fullWidth
+        >
+          {isPreparing ? 'Preparing...' : isCalling ? 'Calling...' : 'Start Voice Call'}
+        </Button>
+
+        <Button
+          variant="secondary"
+          size="S"
+          onClick={hangUp}
+          disabled={!isCalling}
+          fullWidth
+        >
+          Hang Up
+        </Button>
+
+        <Typography variant="omega" textColor="neutral500">
+          Uses the Twilio Voice JavaScript SDK in the Strapi admin UI to place outbound calls to this record.
+        </Typography>
+      </Flex>
+    </Box>
+  );
+};
+
 const BulkClearActions = () => {
   const [isClearing, setIsClearing] = useState(false);
   const { get, del } = useFetchClient();
@@ -343,6 +536,11 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'app-user-panel',
     Component: AppUserPanel,
+  });
+
+  app.injectContentManagerComponent('editView', 'right-links', {
+    name: 'voice-call-panel',
+    Component: VoiceCallPanel,
   });
 
   app.injectContentManagerComponent('listView', 'actions', {

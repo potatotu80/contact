@@ -30,6 +30,7 @@ Custom collection endpoints:
 - `GET /api/app-users/:id/contacts`
 - `GET/POST /api/contacts`
 - `GET/PUT/DELETE /api/contacts/:id`
+- `POST /api/twilio/voice`
 - `POST /api/s3/presign`
 - `GET /admin/app-user-gallery/:id` (admin-authenticated signed read URLs for S3 gallery preview)
 - `GET /privacy_policy` (public privacy policy page)
@@ -80,6 +81,25 @@ GET /admin/app-user-gallery/:id
 
 This endpoint is restricted to authenticated Strapi admin users and avoids making the S3 bucket public.
 
+Twilio Voice admin calling is supported through:
+
+- `POST /api/twilio/voice` for your TwiML App Voice URL
+- `GET /admin/twilio/voice/token` for authenticated Strapi admin users
+
+The admin edit page for `Contact` and `User` includes a softphone panel that can place outbound calls through the Twilio Voice JavaScript SDK.
+
+To configure Twilio Voice:
+
+1. Create or update a TwiML App in Twilio with Voice URL:
+   `https://api.yengsang.com/api/twilio/voice`
+2. Set these environment variables:
+   - `TWILIO_ACCOUNT_SID`
+   - `TWILIO_VOICE_API_KEY_SID`
+   - `TWILIO_VOICE_API_KEY_SECRET`
+   - `TWILIO_VOICE_TWIML_APP_SID`
+   - `TWILIO_VOICE_CALLER_ID`
+3. Install dependencies and rebuild the Strapi admin app.
+
 The public privacy policy page is available at:
 
 ```text
@@ -115,6 +135,11 @@ APP_API_KEY=replace-with-a-long-random-secret
 TWILIO_ACCOUNT_SID=replace-me
 TWILIO_AUTH_TOKEN=replace-me
 TWILIO_VERIFY_SERVICE_SID=replace-me
+TWILIO_VOICE_API_KEY_SID=replace-me
+TWILIO_VOICE_API_KEY_SECRET=replace-me
+TWILIO_VOICE_TWIML_APP_SID=replace-me
+TWILIO_VOICE_CALLER_ID=+12345678901
+TWILIO_VOICE_TOKEN_TTL=3600
 DATABASE_CLIENT=postgres
 DATABASE_HOST=127.0.0.1
 DATABASE_PORT=5432
@@ -175,6 +200,11 @@ APP_API_KEY=replace-with-a-long-random-secret
 TWILIO_ACCOUNT_SID=replace-me
 TWILIO_AUTH_TOKEN=replace-me
 TWILIO_VERIFY_SERVICE_SID=replace-me
+TWILIO_VOICE_API_KEY_SID=replace-me
+TWILIO_VOICE_API_KEY_SECRET=replace-me
+TWILIO_VOICE_TWIML_APP_SID=replace-me
+TWILIO_VOICE_CALLER_ID=+12345678901
+TWILIO_VOICE_TOKEN_TTL=3600
 PUBLIC_URL=https://api.yengsang.com
 ADMIN_URL=https://cmsportal.yengsang.com/admin
 SERVE_ADMIN_PANEL=true
