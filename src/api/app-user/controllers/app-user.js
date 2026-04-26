@@ -143,7 +143,7 @@ const recordAttempt = async (strapi, { phone, action, successful, status }) => {
       phone,
       action,
       successful,
-      status,
+      status: status == null ? null : String(status),
     },
   });
 };
