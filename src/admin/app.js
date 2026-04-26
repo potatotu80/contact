@@ -53,6 +53,23 @@ const normalizePhone = (value) => {
   return compact.startsWith('00') ? `+${compact.slice(2)}` : compact;
 };
 
+const formatCallDuration = (seconds) => {
+  const safeSeconds = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  if (hours > 0) {
+    return [hours, minutes, remainingSeconds]
+      .map((value) => String(value).padStart(2, '0'))
+      .join(':');
+  }
+
+  return [minutes, remainingSeconds]
+    .map((value) => String(value).padStart(2, '0'))
+    .join(':');
+};
+
 const GalleryPreview = ({ items }) => {
   if (!items.length) {
     return (
@@ -293,19 +310,55 @@ const VoiceCallPanel = () => {
   const toggleNotification = useNotification();
   const deviceRef = useRef(null);
   const callRef = useRef(null);
+  const acceptedAtRef = useRef(null);
+  const timerRef = useRef(null);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [callDurationSeconds, setCallDurationSeconds] = useState(0);
   const [callStatus, setCallStatus] = useState('Ready to call');
 
   const supportedSlug = slug === CONTACT_UID || slug === APP_USER_UID;
   const phone = normalizePhone(initialData?.phone);
 
   useEffect(() => () => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+    }
     callRef.current?.disconnect?.();
     deviceRef.current?.destroy?.();
   }, []);
 
   if (!supportedSlug || !phone) return null;
+
+  const stopDurationTimer = () => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const resetCallUiState = (nextStatus) => {
+    stopDurationTimer();
+    callRef.current = null;
+    acceptedAtRef.current = null;
+    setIsCalling(false);
+    setIsPreparing(false);
+    setIsMuted(false);
+    setCallDurationSeconds(0);
+    setCallStatus(nextStatus);
+  };
+
+  const startDurationTimer = () => {
+    stopDurationTimer();
+    acceptedAtRef.current = Date.now();
+    setCallDurationSeconds(0);
+    timerRef.current = window.setInterval(() => {
+      if (!acceptedAtRef.current) return;
+      const elapsed = Math.floor((Date.now() - acceptedAtRef.current) / 1000);
+      setCallDurationSeconds(elapsed);
+    }, 1000);
+  };
 
   const fetchVoiceToken = async () => {
     const response = await get('/twilio/voice/token');
@@ -333,9 +386,7 @@ const VoiceCallPanel = () => {
 
     device.on('error', (error) => {
       const message = error?.message || 'Twilio voice error';
-      setCallStatus(message);
-      setIsPreparing(false);
-      setIsCalling(false);
+      resetCallUiState(message);
       toggleNotification({
         type: 'warning',
         message,
@@ -375,29 +426,26 @@ const VoiceCallPanel = () => {
 
       callRef.current = call;
       setIsCalling(true);
+      setIsMuted(false);
+      setCallDurationSeconds(0);
       setCallStatus(`Calling ${phone}...`);
 
       call.on('accept', () => {
+        startDurationTimer();
         setCallStatus(`Connected to ${phone}`);
       });
 
       call.on('disconnect', () => {
-        callRef.current = null;
-        setIsCalling(false);
-        setCallStatus('Call ended');
+        resetCallUiState('Call ended');
       });
 
       call.on('cancel', () => {
-        callRef.current = null;
-        setIsCalling(false);
-        setCallStatus('Call cancelled');
+        resetCallUiState('Call cancelled');
       });
 
       call.on('error', (error) => {
-        callRef.current = null;
-        setIsCalling(false);
         const message = error?.message || 'Call failed';
-        setCallStatus(message);
+        resetCallUiState(message);
         toggleNotification({
           type: 'warning',
           message,
@@ -417,6 +465,16 @@ const VoiceCallPanel = () => {
 
   const hangUp = () => {
     callRef.current?.disconnect?.();
+  };
+
+  const toggleMute = () => {
+    const activeCall = callRef.current;
+    if (!activeCall || !isCalling) return;
+
+    const nextMutedState = !isMuted;
+    activeCall.mute(nextMutedState);
+    setIsMuted(nextMutedState);
+    setCallStatus(nextMutedState ? 'Call muted' : `Connected to ${phone}`);
   };
 
   return (
@@ -439,32 +497,50 @@ const VoiceCallPanel = () => {
           <Typography variant="pi">{phone}</Typography>
         </Box>
 
+        <Flex justifyContent="space-between" alignItems="center" gap={2}>
+          <Typography variant="omega" textColor="neutral600">
+            Duration
+          </Typography>
+          <Typography variant="pi">
+            {isCalling ? formatCallDuration(callDurationSeconds) : '00:00'}
+          </Typography>
+        </Flex>
+
         <Typography variant="omega" textColor="neutral500">
           {callStatus}
         </Typography>
 
-        <Button
-          variant="success"
-          size="S"
-          onClick={startCall}
-          disabled={isPreparing || isCalling}
-          fullWidth
-        >
-          {isPreparing ? 'Preparing...' : isCalling ? 'Calling...' : 'Start Voice Call'}
-        </Button>
+        <Flex gap={2} wrap="wrap">
+          <Button
+            variant="success"
+            size="S"
+            onClick={startCall}
+            disabled={isPreparing || isCalling}
+          >
+            {isPreparing ? 'Preparing...' : isCalling ? 'Calling...' : 'Call'}
+          </Button>
 
-        <Button
-          variant="secondary"
-          size="S"
-          onClick={hangUp}
-          disabled={!isCalling}
-          fullWidth
-        >
-          Hang Up
-        </Button>
+          <Button
+            variant="secondary"
+            size="S"
+            onClick={toggleMute}
+            disabled={!isCalling}
+          >
+            {isMuted ? 'Unmute' : 'Mute'}
+          </Button>
+
+          <Button
+            variant="danger-light"
+            size="S"
+            onClick={hangUp}
+            disabled={!isCalling}
+          >
+            Hang Up
+          </Button>
+        </Flex>
 
         <Typography variant="omega" textColor="neutral500">
-          Uses the Twilio Voice JavaScript SDK in the Strapi admin UI to place outbound calls to this record.
+          Quick call controls for the current record. Uses the Twilio Voice JavaScript SDK inside the Strapi admin UI.
         </Typography>
       </Flex>
     </Box>
@@ -534,13 +610,13 @@ const config = {
 
 const bootstrap = (app) => {
   app.injectContentManagerComponent('editView', 'right-links', {
-    name: 'app-user-panel',
-    Component: AppUserPanel,
+    name: 'voice-call-panel',
+    Component: VoiceCallPanel,
   });
 
   app.injectContentManagerComponent('editView', 'right-links', {
-    name: 'voice-call-panel',
-    Component: VoiceCallPanel,
+    name: 'app-user-panel',
+    Component: AppUserPanel,
   });
 
   app.injectContentManagerComponent('listView', 'actions', {
