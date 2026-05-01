@@ -11,6 +11,7 @@ const OTP_ATTEMPT_UID = 'api::otp-attempt.otp-attempt';
 const OTP_WINDOW_MS = 10 * 60 * 1000;
 const SEND_OTP_LIMIT = 3;
 const VERIFY_OTP_LIMIT = 5;
+const OTP_CHANNEL = 'whatsapp';
 
 const sanitizeSegment = (value, fallback) => {
   const normalized = (value || fallback).trim().replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -215,7 +216,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       path: `/v2/Services/${config.verifyServiceSid}/Verifications`,
       body: {
         To: phone,
-        Channel: 'sms',
+        Channel: OTP_CHANNEL,
       },
       accountSid: config.accountSid,
       authToken: config.authToken,
@@ -237,7 +238,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       data: {
         phone,
         status: payload.status || 'pending',
-        channel: payload.channel || 'sms',
+        channel: payload.channel || OTP_CHANNEL,
       },
     };
   },
