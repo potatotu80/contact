@@ -11,6 +11,19 @@ const OTP_ATTEMPT_UID = 'api::otp-attempt.otp-attempt';
 const OTP_WINDOW_MS = 10 * 60 * 1000;
 const SEND_OTP_LIMIT = 3;
 const VERIFY_OTP_LIMIT = 5;
+const APP_USER_FIELDS = [
+  'id',
+  'email',
+  'phone',
+  'phoneVerified',
+  'full_name',
+  'ic_number',
+  'national_id_number',
+  'paynow_number',
+  'paynow_nickname',
+  'device_id',
+  'image_url',
+];
 
 const sanitizeSegment = (value, fallback) => {
   const normalized = (value || fallback).trim().replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -188,6 +201,17 @@ const buildPendingEmail = (phone, deviceId) => {
   return `verified-${phonePart}-${devicePart}@pending.local`;
 };
 
+const isProfileComplete = (user) => {
+  const nationalId = String(user?.national_id_number || user?.ic_number || '').trim();
+  return Boolean(
+    String(user?.full_name || '').trim() &&
+      nationalId &&
+      String(user?.paynow_number || '').trim() &&
+      String(user?.paynow_nickname || '').trim() &&
+      !String(user?.email || '').endsWith('@pending.local')
+  );
+};
+
 module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => ({
   async sendOtp(ctx) {
     const phone = normalizePhone(ctx.request.body?.phone);
@@ -323,7 +347,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           $eq: deviceId,
         },
       },
-      fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
+      fields: APP_USER_FIELDS,
       limit: 1,
     });
 
@@ -335,7 +359,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
               $eq: phone,
             },
           },
-          fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
+          fields: APP_USER_FIELDS,
           limit: 1,
         });
 
@@ -351,7 +375,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           device_id: deviceId,
           email: existingUser.email || pendingEmail,
         },
-        fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
+        fields: APP_USER_FIELDS,
       });
     } else {
       user = await strapi.entityService.create(APP_USER_UID, {
@@ -361,14 +385,14 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           phoneVerified: true,
           device_id: deviceId,
         },
-        fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
+        fields: APP_USER_FIELDS,
       });
     }
 
     const sanitizedUser = await this.sanitizeOutput(user, ctx);
 
     return this.transformResponse(sanitizedUser, {
-      profileIncomplete: !user.ic_number || user.email.endsWith('@pending.local'),
+      profileIncomplete: !isProfileComplete(user),
     });
   },
 
@@ -483,7 +507,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       data: {
         image_url: imageUrl,
       },
-      fields: ['id', 'email', 'phone', 'phoneVerified', 'ic_number', 'device_id', 'image_url'],
+      fields: APP_USER_FIELDS,
     });
 
     const sanitizedUser = await this.sanitizeOutput(updatedUser, ctx);
