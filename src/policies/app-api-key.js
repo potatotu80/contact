@@ -11,6 +11,20 @@ const getClientIp = (ctx) => {
   return ctx.request.ip || ctx.ip || 'unknown';
 };
 
+const rejectForbidden = (ctx, message) => {
+  ctx.status = 403;
+  ctx.body = {
+    data: null,
+    error: {
+      status: 403,
+      name: 'ForbiddenError',
+      message,
+      details: {},
+    },
+  };
+  return false;
+};
+
 module.exports = async (policyContext, _config, { strapi }) => {
   const headerKey = (
     policyContext.request.headers['x-app-api-key']
@@ -36,7 +50,7 @@ module.exports = async (policyContext, _config, { strapi }) => {
       `[app-api-key] Missing tenant API key for ${policyContext.request.method} ${policyContext.request.path} ` +
       `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
     );
-    return policyContext.forbidden('Invalid application API key.');
+    return rejectForbidden(policyContext, 'Invalid application API key.');
   }
 
   const tenant = await findTenantByApiKey(strapi, presentedKey);
@@ -50,5 +64,5 @@ module.exports = async (policyContext, _config, { strapi }) => {
     `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
   );
 
-  return policyContext.forbidden('Invalid application API key.');
+  return rejectForbidden(policyContext, 'Invalid application API key.');
 };
