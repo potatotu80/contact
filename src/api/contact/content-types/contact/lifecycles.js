@@ -43,12 +43,20 @@ const syncUserSnapshot = async (event) => {
 
   const appUser = await strapi.entityService.findOne(APP_USER_UID, userId, {
     fields: ['email', 'phone'],
+    populate: {
+      tenant: {
+        fields: ['id'],
+      },
+    },
   });
 
   if (!appUser) return;
 
   data.user_email = appUser.email || null;
   data.user_phone = appUser.phone || null;
+  if (appUser.tenant?.id) {
+    data.tenant = appUser.tenant.id;
+  }
 };
 
 module.exports = {

@@ -33,6 +33,11 @@
       "relation": "manyToOne",
       "target": "api::app-user.app-user",
       "required": true
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant"
     }
   }
 }

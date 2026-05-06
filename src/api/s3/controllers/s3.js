@@ -2,8 +2,11 @@
 
 const crypto = require('crypto');
 const AWS = require('aws-sdk');
-
-const APP_USER_UID = 'api::app-user.app-user';
+const {
+  APP_USER_UID,
+  assertTenantScopeForUser,
+  buildTenantUserImagePrefix,
+} = require('../../../utils/tenant-access');
 
 const sanitizeFileName = (fileName) => {
   const base = (fileName || 'image.jpg').trim();
@@ -24,10 +27,11 @@ const parsePositiveInt = (value) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
-const resolveUserId = async ({ userId, userEmail }) => {
+const resolveUserId = async ({ strapi, tenantId, userId, userEmail }) => {
   const parsedId = parsePositiveInt(userId);
   if (parsedId) {
-    return parsedId;
+    const tenantScopedUser = await assertTenantScopeForUser(strapi, tenantId, parsedId);
+    return tenantScopedUser?.id || null;
   }
 
   if (!userEmail) {
@@ -36,9 +40,20 @@ const resolveUserId = async ({ userId, userEmail }) => {
 
   const users = await strapi.entityService.findMany(APP_USER_UID, {
     filters: {
-      email: {
-        $eq: userEmail,
-      },
+      $and: [
+        {
+          email: {
+            $eq: userEmail,
+          },
+        },
+        {
+          tenant: {
+            id: {
+              $eq: tenantId,
+            },
+          },
+        },
+      ],
     },
     fields: ['id'],
     limit: 1,
@@ -49,6 +64,7 @@ const resolveUserId = async ({ userId, userEmail }) => {
 
 module.exports = {
   async presign(ctx) {
+    const tenant = ctx.state.appTenant;
     const {
       fileName,
       contentType,
@@ -69,13 +85,23 @@ module.exports = {
       return ctx.internalServerError('S3 configuration missing: S3_BUCKET_NAME or AWS_REGION.');
     }
 
-    const resolvedUserId = await resolveUserId({ userId, userEmail });
+    const resolvedUserId = await resolveUserId({
+      strapi,
+      tenantId: tenant.id,
+      userId,
+      userEmail,
+    });
     if (!resolvedUserId) {
-      return ctx.badRequest('A valid userId (or userEmail that resolves to one user) is required.');
+      return ctx.badRequest('A valid tenant userId (or userEmail that resolves to one tenant user) is required.');
     }
 
     const appUser = await strapi.entityService.findOne(APP_USER_UID, resolvedUserId, {
       fields: ['id'],
+      populate: {
+        tenant: {
+          fields: ['id', 'slug', 'name'],
+        },
+      },
     });
 
     if (!appUser) {
@@ -84,7 +110,7 @@ module.exports = {
 
     const safeFileName = sanitizeFileName(fileName);
     const uniquePart = crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex');
-    const keyPrefix = `${prefix}/${resolvedUserId}/images`;
+    const keyPrefix = buildTenantUserImagePrefix(appUser.tenant, resolvedUserId, prefix);
     const objectKey = `${keyPrefix}/${Date.now()}-${uniquePart}-${safeFileName}`;
 
     const s3Client = new AWS.S3({

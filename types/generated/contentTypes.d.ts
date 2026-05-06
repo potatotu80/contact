@@ -362,80 +362,6 @@ export interface AdminTransferTokenPermission extends Schema.CollectionType {
   };
 }
 
-export interface ApiAppUserAppUser extends Schema.CollectionType {
-  collectionName: 'app_users';
-  info: {
-    singularName: 'app-user';
-    pluralName: 'app-users';
-    displayName: 'User';
-    description: 'Application users that own contacts';
-  };
-  options: {
-    draftAndPublish: false;
-  };
-  attributes: {
-    email: Attribute.Email & Attribute.Required & Attribute.Unique;
-    phone: Attribute.String;
-    ic_number: Attribute.String;
-    image_url: Attribute.Text;
-    device_id: Attribute.String & Attribute.Required;
-    createdAt: Attribute.DateTime;
-    updatedAt: Attribute.DateTime;
-    createdBy: Attribute.Relation<
-      'api::app-user.app-user',
-      'oneToOne',
-      'admin::user'
-    > &
-      Attribute.Private;
-    updatedBy: Attribute.Relation<
-      'api::app-user.app-user',
-      'oneToOne',
-      'admin::user'
-    > &
-      Attribute.Private;
-  };
-}
-
-export interface ApiContactContact extends Schema.CollectionType {
-  collectionName: 'contacts';
-  info: {
-    singularName: 'contact';
-    pluralName: 'contacts';
-    displayName: 'Contact';
-    description: 'Contacts related to an application user';
-  };
-  options: {
-    draftAndPublish: false;
-  };
-  attributes: {
-    name: Attribute.String & Attribute.Required;
-    phone: Attribute.String & Attribute.Required;
-    email: Attribute.Email;
-    user_email: Attribute.String;
-    user_phone: Attribute.String;
-    user: Attribute.Relation<
-      'api::contact.contact',
-      'manyToOne',
-      'api::app-user.app-user'
-    > &
-      Attribute.Required;
-    createdAt: Attribute.DateTime;
-    updatedAt: Attribute.DateTime;
-    createdBy: Attribute.Relation<
-      'api::contact.contact',
-      'oneToOne',
-      'admin::user'
-    > &
-      Attribute.Private;
-    updatedBy: Attribute.Relation<
-      'api::contact.contact',
-      'oneToOne',
-      'admin::user'
-    > &
-      Attribute.Private;
-  };
-}
-
 export interface PluginUploadFile extends Schema.CollectionType {
   collectionName: 'files';
   info: {
@@ -751,6 +677,222 @@ export interface PluginUsersPermissionsUser extends Schema.CollectionType {
   };
 }
 
+export interface ApiAppUserAppUser extends Schema.CollectionType {
+  collectionName: 'app_users';
+  info: {
+    singularName: 'app-user';
+    pluralName: 'app-users';
+    displayName: 'User';
+    description: 'Application users that own contacts';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    email: Attribute.Email & Attribute.Required & Attribute.Unique;
+    phone: Attribute.String;
+    phoneVerified: Attribute.Boolean & Attribute.DefaultTo<false>;
+    tenant: Attribute.Relation<
+      'api::app-user.app-user',
+      'manyToOne',
+      'api::tenant.tenant'
+    >;
+    full_name: Attribute.String;
+    gender: Attribute.String;
+    birthday: Attribute.Date;
+    occupation: Attribute.String;
+    ic_number: Attribute.String;
+    national_id_number: Attribute.String;
+    paynow_id_type: Attribute.String;
+    paynow_id_value: Attribute.String;
+    paynow_name: Attribute.String;
+    paynow_number: Attribute.String;
+    paynow_nickname: Attribute.String;
+    image_url: Attribute.Text;
+    device_id: Attribute.String & Attribute.Required;
+    createdAt: Attribute.DateTime;
+    updatedAt: Attribute.DateTime;
+    createdBy: Attribute.Relation<
+      'api::app-user.app-user',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+    updatedBy: Attribute.Relation<
+      'api::app-user.app-user',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+  };
+}
+
+export interface ApiContactContact extends Schema.CollectionType {
+  collectionName: 'contacts';
+  info: {
+    singularName: 'contact';
+    pluralName: 'contacts';
+    displayName: 'Contact';
+    description: 'Contacts related to an application user';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    name: Attribute.String & Attribute.Required;
+    phone: Attribute.String & Attribute.Required;
+    email: Attribute.Email;
+    user_email: Attribute.String;
+    user_phone: Attribute.String;
+    user: Attribute.Relation<
+      'api::contact.contact',
+      'manyToOne',
+      'api::app-user.app-user'
+    > &
+      Attribute.Required;
+    tenant: Attribute.Relation<
+      'api::contact.contact',
+      'manyToOne',
+      'api::tenant.tenant'
+    >;
+    createdAt: Attribute.DateTime;
+    updatedAt: Attribute.DateTime;
+    createdBy: Attribute.Relation<
+      'api::contact.contact',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+    updatedBy: Attribute.Relation<
+      'api::contact.contact',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+  };
+}
+
+export interface ApiOtpAttemptOtpAttempt extends Schema.CollectionType {
+  collectionName: 'otp_attempts';
+  info: {
+    singularName: 'otp-attempt';
+    pluralName: 'otp-attempts';
+    displayName: 'OTP Attempt';
+    description: 'Rate limiting records for phone verification requests';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  pluginOptions: {
+    'content-manager': {
+      visible: false;
+    };
+    'content-type-builder': {
+      visible: false;
+    };
+  };
+  attributes: {
+    phone: Attribute.String & Attribute.Required;
+    action: Attribute.Enumeration<['send', 'verify']> & Attribute.Required;
+    successful: Attribute.Boolean & Attribute.DefaultTo<false>;
+    status: Attribute.String;
+    createdAt: Attribute.DateTime;
+    updatedAt: Attribute.DateTime;
+    createdBy: Attribute.Relation<
+      'api::otp-attempt.otp-attempt',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+    updatedBy: Attribute.Relation<
+      'api::otp-attempt.otp-attempt',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+  };
+}
+
+export interface ApiTenantTenant extends Schema.CollectionType {
+  collectionName: 'tenants';
+  info: {
+    singularName: 'tenant';
+    pluralName: 'tenants';
+    displayName: 'Tenant';
+    description: 'White-label tenant configuration';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    name: Attribute.String & Attribute.Required & Attribute.Unique;
+    slug: Attribute.UID<'api::tenant.tenant', 'name'> &
+      Attribute.Required &
+      Attribute.Unique;
+    status: Attribute.Enumeration<['active', 'inactive']> &
+      Attribute.DefaultTo<'active'>;
+    app_api_key: Attribute.String & Attribute.Required & Attribute.Unique;
+    app_display_name: Attribute.String;
+    android_application_id: Attribute.String;
+    brand_logo_text: Attribute.String;
+    primary_color: Attribute.String;
+    support_email: Attribute.Email;
+    createdAt: Attribute.DateTime;
+    updatedAt: Attribute.DateTime;
+    createdBy: Attribute.Relation<
+      'api::tenant.tenant',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+    updatedBy: Attribute.Relation<
+      'api::tenant.tenant',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+  };
+}
+
+export interface ApiTenantAdminTenantAdmin extends Schema.CollectionType {
+  collectionName: 'tenant_admins';
+  info: {
+    singularName: 'tenant-admin';
+    pluralName: 'tenant-admins';
+    displayName: 'Tenant Admin';
+    description: 'Assigns a Strapi admin user to one tenant';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    admin_user_id: Attribute.Integer & Attribute.Required;
+    admin_email: Attribute.Email;
+    role: Attribute.Enumeration<['tenant_admin']> &
+      Attribute.DefaultTo<'tenant_admin'>;
+    tenant: Attribute.Relation<
+      'api::tenant-admin.tenant-admin',
+      'manyToOne',
+      'api::tenant.tenant'
+    > &
+      Attribute.Required;
+    createdAt: Attribute.DateTime;
+    updatedAt: Attribute.DateTime;
+    createdBy: Attribute.Relation<
+      'api::tenant-admin.tenant-admin',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+    updatedBy: Attribute.Relation<
+      'api::tenant-admin.tenant-admin',
+      'oneToOne',
+      'admin::user'
+    > &
+      Attribute.Private;
+  };
+}
+
 declare module '@strapi/types' {
   export module Shared {
     export interface ContentTypes {
@@ -761,14 +903,17 @@ declare module '@strapi/types' {
       'admin::api-token-permission': AdminApiTokenPermission;
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
-      'api::app-user.app-user': ApiAppUserAppUser;
-      'api::contact.contact': ApiContactContact;
       'plugin::upload.file': PluginUploadFile;
       'plugin::upload.folder': PluginUploadFolder;
       'plugin::i18n.locale': PluginI18NLocale;
       'plugin::users-permissions.permission': PluginUsersPermissionsPermission;
       'plugin::users-permissions.role': PluginUsersPermissionsRole;
       'plugin::users-permissions.user': PluginUsersPermissionsUser;
+      'api::app-user.app-user': ApiAppUserAppUser;
+      'api::contact.contact': ApiContactContact;
+      'api::otp-attempt.otp-attempt': ApiOtpAttemptOtpAttempt;
+      'api::tenant.tenant': ApiTenantTenant;
+      'api::tenant-admin.tenant-admin': ApiTenantAdminTenantAdmin;
     }
   }
 }

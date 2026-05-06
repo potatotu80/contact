@@ -5,8 +5,13 @@ const https = require('https');
 const path = require('path');
 const crypto = require('crypto');
 const { createCoreController } = require('@strapi/strapi').factories;
+const {
+  APP_USER_UID,
+  assertTenantScopeForUser,
+  buildTenantLocalImagePath,
+  getTenantFilter,
+} = require('../../../utils/tenant-access');
 
-const APP_USER_UID = 'api::app-user.app-user';
 const OTP_ATTEMPT_UID = 'api::otp-attempt.otp-attempt';
 const OTP_WINDOW_MS = 10 * 60 * 1000;
 const SEND_OTP_LIMIT = 3;
@@ -202,10 +207,11 @@ const extractTwilioErrorMessage = (payload, fallbackMessage) => {
   return fallbackMessage;
 };
 
-const buildPendingEmail = (phone, deviceId) => {
+const buildPendingEmail = (phone, deviceId, tenant) => {
   const phonePart = sanitizeForEmailLocalPart(phone.replace(/^\+/, ''), 'phone');
   const devicePart = sanitizeForEmailLocalPart(deviceId, 'device');
-  return `verified-${phonePart}-${devicePart}@pending.local`;
+  const tenantPart = sanitizeForEmailLocalPart(tenant?.slug || tenant?.name || 'tenant', 'tenant');
+  return `verified-${tenantPart}-${phonePart}-${devicePart}@pending.local`;
 };
 
 const isProfileComplete = (user) => {
@@ -224,7 +230,168 @@ const isProfileComplete = (user) => {
   );
 };
 
+const withTenantFilters = (tenantId, extraFilters = null) => {
+  if (!extraFilters || Object.keys(extraFilters).length === 0) {
+    return getTenantFilter(tenantId);
+  }
+
+  return {
+    $and: [getTenantFilter(tenantId), extraFilters],
+  };
+};
+
 module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => ({
+  async find(ctx) {
+    const tenant = ctx.state.appTenant;
+    const page = Math.max(1, Number(ctx.query.page) || 1);
+    const pageSize = Math.max(1, Math.min(100, Number(ctx.query.pageSize) || 25));
+    const start = (page - 1) * pageSize;
+    const sort = ctx.query.sort || ['createdAt:desc'];
+    const filters = withTenantFilters(tenant.id, ctx.query.filters);
+
+    const [users, total] = await Promise.all([
+      strapi.entityService.findMany(APP_USER_UID, {
+        filters,
+        fields: APP_USER_FIELDS,
+        populate: {
+          tenant: {
+            fields: ['id', 'name', 'slug'],
+          },
+        },
+        sort,
+        start,
+        limit: pageSize,
+      }),
+      strapi.db.query(APP_USER_UID).count({
+        where: filters,
+      }),
+    ]);
+
+    const sanitizedUsers = await this.sanitizeOutput(users, ctx);
+    return this.transformResponse(sanitizedUsers, {
+      pagination: {
+        page,
+        pageSize,
+        pageCount: Math.ceil(total / pageSize),
+        total,
+      },
+    });
+  },
+
+  async findOne(ctx) {
+    const tenant = ctx.state.appTenant;
+    const userId = Number(ctx.params.id);
+    if (Number.isNaN(userId)) {
+      return ctx.badRequest('User id must be a valid number.');
+    }
+
+    const user = await assertTenantScopeForUser(strapi, tenant.id, userId);
+    if (!user) {
+      return ctx.notFound('User not found.');
+    }
+
+    const fullUser = await strapi.entityService.findOne(APP_USER_UID, userId, {
+      fields: APP_USER_FIELDS,
+      populate: {
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      },
+    });
+
+    const sanitizedUser = await this.sanitizeOutput(fullUser, ctx);
+    return this.transformResponse(sanitizedUser, {
+      profileIncomplete: !isProfileComplete(fullUser),
+    });
+  },
+
+  async create(ctx) {
+    const tenant = ctx.state.appTenant;
+    const data = ctx.request.body?.data;
+    if (!data || typeof data !== 'object') {
+      return ctx.badRequest('A data object is required.');
+    }
+
+    const user = await strapi.entityService.create(APP_USER_UID, {
+      data: {
+        ...data,
+        tenant: tenant.id,
+      },
+      fields: APP_USER_FIELDS,
+      populate: {
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      },
+    });
+
+    const sanitizedUser = await this.sanitizeOutput(user, ctx);
+    return this.transformResponse(sanitizedUser, {
+      profileIncomplete: !isProfileComplete(user),
+    });
+  },
+
+  async update(ctx) {
+    const tenant = ctx.state.appTenant;
+    const userId = Number(ctx.params.id);
+    if (Number.isNaN(userId)) {
+      return ctx.badRequest('User id must be a valid number.');
+    }
+
+    const existingUser = await assertTenantScopeForUser(strapi, tenant.id, userId);
+    if (!existingUser) {
+      return ctx.notFound('User not found.');
+    }
+
+    const data = ctx.request.body?.data;
+    if (!data || typeof data !== 'object') {
+      return ctx.badRequest('A data object is required.');
+    }
+
+    const user = await strapi.entityService.update(APP_USER_UID, userId, {
+      data: {
+        ...data,
+        tenant: tenant.id,
+      },
+      fields: APP_USER_FIELDS,
+      populate: {
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      },
+    });
+
+    const sanitizedUser = await this.sanitizeOutput(user, ctx);
+    return this.transformResponse(sanitizedUser, {
+      profileIncomplete: !isProfileComplete(user),
+    });
+  },
+
+  async delete(ctx) {
+    const tenant = ctx.state.appTenant;
+    const userId = Number(ctx.params.id);
+    if (Number.isNaN(userId)) {
+      return ctx.badRequest('User id must be a valid number.');
+    }
+
+    const existingUser = await assertTenantScopeForUser(strapi, tenant.id, userId);
+    if (!existingUser) {
+      return ctx.notFound('User not found.');
+    }
+
+    const deletedUser = await strapi.entityService.delete(APP_USER_UID, userId, {
+      fields: APP_USER_FIELDS,
+      populate: {
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      },
+    });
+
+    const sanitizedUser = await this.sanitizeOutput(deletedUser, ctx);
+    return this.transformResponse(sanitizedUser);
+  },
+
   async sendOtp(ctx) {
     const phone = normalizePhone(ctx.request.body?.phone);
     if (!phone) {
@@ -356,6 +523,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
   },
 
   async registerVerifiedUser(ctx) {
+    const tenant = ctx.state.appTenant;
     const phone = normalizePhone(ctx.request.body?.phone);
     const deviceId = String(ctx.request.body?.deviceId || '').trim();
 
@@ -369,14 +537,14 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       return ctx.badRequest('Phone number must be in international format, for example +60123456789.');
     }
 
-    const pendingEmail = buildPendingEmail(phone, deviceId);
+    const pendingEmail = buildPendingEmail(phone, deviceId, tenant);
 
     const existingByDevice = await strapi.entityService.findMany(APP_USER_UID, {
-      filters: {
+      filters: withTenantFilters(tenant.id, {
         device_id: {
           $eq: deviceId,
         },
-      },
+      }),
       fields: APP_USER_FIELDS,
       limit: 1,
     });
@@ -384,11 +552,11 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     const existingByPhone = existingByDevice.length
       ? []
       : await strapi.entityService.findMany(APP_USER_UID, {
-          filters: {
+          filters: withTenantFilters(tenant.id, {
             phone: {
               $eq: phone,
             },
-          },
+          }),
           fields: APP_USER_FIELDS,
           limit: 1,
         });
@@ -404,8 +572,14 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           phoneVerified: true,
           device_id: deviceId,
           email: existingUser.email || pendingEmail,
+          tenant: tenant.id,
         },
         fields: APP_USER_FIELDS,
+        populate: {
+          tenant: {
+            fields: ['id', 'name', 'slug'],
+          },
+        },
       });
     } else {
       user = await strapi.entityService.create(APP_USER_UID, {
@@ -414,8 +588,14 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           phone,
           phoneVerified: true,
           device_id: deviceId,
+          tenant: tenant.id,
         },
         fields: APP_USER_FIELDS,
+        populate: {
+          tenant: {
+            fields: ['id', 'name', 'slug'],
+          },
+        },
       });
     }
 
@@ -423,10 +603,16 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
 
     return this.transformResponse(sanitizedUser, {
       profileIncomplete: !isProfileComplete(user),
+      tenant: {
+        id: tenant.id,
+        slug: tenant.slug,
+        name: tenant.name,
+      },
     });
   },
 
   async contacts(ctx) {
+    const tenant = ctx.state.appTenant;
     const userId = Number(ctx.params.id);
     const page = Math.max(1, Number(ctx.query.page) || 1);
     const pageSize = Math.max(1, Math.min(100, Number(ctx.query.pageSize) || 25));
@@ -438,8 +624,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       return ctx.badRequest('User id must be a valid number.');
     }
 
-    const user = await strapi.entityService.findOne('api::app-user.app-user', userId);
-
+    const user = await assertTenantScopeForUser(strapi, tenant.id, userId);
     if (!user) {
       return ctx.notFound('User not found.');
     }
@@ -447,6 +632,9 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     const where = {
       user: {
         id: userId,
+      },
+      tenant: {
+        id: tenant.id,
       },
     };
 
@@ -461,6 +649,9 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
         filters: where,
         populate: {
           user: true,
+          tenant: {
+            fields: ['id', 'name', 'slug'],
+          },
         },
         sort,
         start,
@@ -484,14 +675,13 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
   },
 
   async uploadProfileImage(ctx) {
+    const tenant = ctx.state.appTenant;
     const userId = Number(ctx.params.id);
     if (Number.isNaN(userId)) {
       return ctx.badRequest('User id must be a valid number.');
     }
 
-    const user = await strapi.entityService.findOne(APP_USER_UID, userId, {
-      fields: ['id', 'image_url'],
-    });
+    const user = await assertTenantScopeForUser(strapi, tenant.id, userId);
     if (!user) {
       return ctx.notFound('User not found.');
     }
@@ -514,7 +704,8 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       return ctx.badRequest('Uploaded file path is missing.');
     }
 
-    const uploadsRoot = path.join(strapi.dirs.static.public, 'uploads', 'user-images', String(userId));
+    const localTenantPath = buildTenantLocalImagePath(tenant, userId);
+    const uploadsRoot = path.join(strapi.dirs.static.public, 'uploads', 'user-images', localTenantPath);
     const extension = getFileExtension(uploadedFile);
     const fileNameBase = sanitizeSegment(
       path.parse(uploadedFile.originalFilename || uploadedFile.name || 'profile-image').name,
@@ -530,14 +721,20 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     await fs.copyFile(sourcePath, destinationPath);
     await fs.unlink(sourcePath).catch(() => {});
 
-    const relativePath = `/uploads/user-images/${userId}/${storedFileName}`;
+    const relativePath = `/uploads/user-images/${localTenantPath}/${storedFileName}`;
     const imageUrl = buildPublicFileUrl(relativePath);
 
     const updatedUser = await strapi.entityService.update(APP_USER_UID, userId, {
       data: {
         image_url: imageUrl,
+        tenant: tenant.id,
       },
       fields: APP_USER_FIELDS,
+      populate: {
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      },
     });
 
     const sanitizedUser = await this.sanitizeOutput(updatedUser, ctx);

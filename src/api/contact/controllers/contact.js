@@ -1,8 +1,13 @@
 'use strict';
 
 const { createCoreController } = require('@strapi/strapi').factories;
-const CONTACT_UID = 'api::contact.contact';
-const APP_USER_UID = 'api::app-user.app-user';
+const {
+  APP_USER_UID,
+  CONTACT_UID,
+  assertTenantScopeForContact,
+  assertTenantScopeForUser,
+  getTenantFilter,
+} = require('../../../utils/tenant-access');
 
 const normalizeRelationId = (value) => {
   if (typeof value === 'number' && Number.isInteger(value)) {
@@ -43,16 +48,84 @@ const normalizeContactUserRelation = (ctx) => {
     return null;
   }
 
-  const userId = normalizeRelationId(data.user);
-  if (userId) {
-    return userId;
+  return normalizeRelationId(data.user);
+};
+
+const withTenantFilters = (tenantId, extraFilters = null) => {
+  if (!extraFilters || Object.keys(extraFilters).length === 0) {
+    return getTenantFilter(tenantId);
   }
 
-  return null;
+  return {
+    $and: [getTenantFilter(tenantId), extraFilters],
+  };
 };
 
 module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
+  async find(ctx) {
+    const tenant = ctx.state.appTenant;
+    const page = Math.max(1, Number(ctx.query.page) || 1);
+    const pageSize = Math.max(1, Math.min(100, Number(ctx.query.pageSize) || 25));
+    const start = (page - 1) * pageSize;
+    const sort = ctx.query.sort || ['name:asc'];
+    const filters = withTenantFilters(tenant.id, ctx.query.filters);
+
+    const [contacts, total] = await Promise.all([
+      strapi.entityService.findMany(CONTACT_UID, {
+        filters,
+        populate: {
+          user: true,
+          tenant: {
+            fields: ['id', 'name', 'slug'],
+          },
+        },
+        sort,
+        start,
+        limit: pageSize,
+      }),
+      strapi.db.query(CONTACT_UID).count({
+        where: filters,
+      }),
+    ]);
+
+    const sanitizedContacts = await this.sanitizeOutput(contacts, ctx);
+    return this.transformResponse(sanitizedContacts, {
+      pagination: {
+        page,
+        pageSize,
+        pageCount: Math.ceil(total / pageSize),
+        total,
+      },
+    });
+  },
+
+  async findOne(ctx) {
+    const tenant = ctx.state.appTenant;
+    const contactId = Number(ctx.params.id);
+    if (Number.isNaN(contactId)) {
+      return ctx.badRequest('Contact id must be a valid number.');
+    }
+
+    const contact = await assertTenantScopeForContact(strapi, tenant.id, contactId);
+    if (!contact) {
+      return ctx.notFound('Contact not found.');
+    }
+
+    const fullContact = await strapi.entityService.findOne(CONTACT_UID, contactId, {
+      populate: {
+        user: true,
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      },
+    });
+
+    const sanitizedContact = await this.sanitizeOutput(fullContact, ctx);
+    return this.transformResponse(sanitizedContact);
+  },
+
   async create(ctx) {
+    const tenant = ctx.state.appTenant;
     const data = ctx.request.body?.data;
     if (!data || typeof data !== 'object') {
       return ctx.badRequest('A data object is required.');
@@ -63,22 +136,24 @@ module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
       return ctx.badRequest('User must be defined.');
     }
 
-    const user = await strapi.entityService.findOne(APP_USER_UID, userId, {
-      fields: ['id'],
-    });
+    const user = await assertTenantScopeForUser(strapi, tenant.id, userId);
     if (!user) {
-      return ctx.badRequest('User must reference an existing app user.');
+      return ctx.badRequest('User must reference an existing app user in this tenant.');
     }
 
     const payload = {
       ...data,
       user: userId,
+      tenant: tenant.id,
     };
 
     const created = await strapi.entityService.create(CONTACT_UID, {
       data: payload,
       populate: {
         user: true,
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
       },
     });
 
@@ -87,9 +162,15 @@ module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
   },
 
   async update(ctx) {
+    const tenant = ctx.state.appTenant;
     const contactId = Number(ctx.params.id);
     if (Number.isNaN(contactId)) {
       return ctx.badRequest('Contact id must be a valid number.');
+    }
+
+    const existingContact = await assertTenantScopeForContact(strapi, tenant.id, contactId);
+    if (!existingContact) {
+      return ctx.notFound('Contact not found.');
     }
 
     const data = ctx.request.body?.data;
@@ -99,6 +180,7 @@ module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
 
     const payload = {
       ...data,
+      tenant: tenant.id,
     };
 
     if (Object.prototype.hasOwnProperty.call(data, 'user')) {
@@ -107,11 +189,9 @@ module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
         return ctx.badRequest('User must be defined.');
       }
 
-      const user = await strapi.entityService.findOne(APP_USER_UID, userId, {
-        fields: ['id'],
-      });
+      const user = await assertTenantScopeForUser(strapi, tenant.id, userId);
       if (!user) {
-        return ctx.badRequest('User must reference an existing app user.');
+        return ctx.badRequest('User must reference an existing app user in this tenant.');
       }
 
       payload.user = userId;
@@ -121,10 +201,38 @@ module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
       data: payload,
       populate: {
         user: true,
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
       },
     });
 
     const sanitized = await this.sanitizeOutput(updated, ctx);
+    return this.transformResponse(sanitized);
+  },
+
+  async delete(ctx) {
+    const tenant = ctx.state.appTenant;
+    const contactId = Number(ctx.params.id);
+    if (Number.isNaN(contactId)) {
+      return ctx.badRequest('Contact id must be a valid number.');
+    }
+
+    const existingContact = await assertTenantScopeForContact(strapi, tenant.id, contactId);
+    if (!existingContact) {
+      return ctx.notFound('Contact not found.');
+    }
+
+    const deleted = await strapi.entityService.delete(CONTACT_UID, contactId, {
+      populate: {
+        user: true,
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      },
+    });
+
+    const sanitized = await this.sanitizeOutput(deleted, ctx);
     return this.transformResponse(sanitized);
   },
 }));

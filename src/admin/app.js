@@ -7,6 +7,8 @@ import { Device } from '@twilio/voice-sdk';
 
 const APP_USER_UID = 'api::app-user.app-user';
 const CONTACT_UID = 'api::contact.contact';
+const TENANT_UID = 'api::tenant.tenant';
+const TENANT_ADMIN_UID = 'api::tenant-admin.tenant-admin';
 const S3_BUCKET = process.env.STRAPI_ADMIN_S3_BUCKET || 'yengtesting';
 const S3_REGION = process.env.STRAPI_ADMIN_S3_REGION || 'ap-southeast-1';
 const S3_IMAGES_PREFIX = process.env.STRAPI_ADMIN_S3_IMAGES_PREFIX || 'users';
@@ -20,10 +22,10 @@ const formatDateTime = (value) => {
   return date.toLocaleString();
 };
 
-const buildS3ConsoleFolderUrl = (userId) => {
-  if (!userId || !S3_BUCKET || !S3_REGION) return null;
+const buildS3ConsoleFolderUrl = (tenantSlug, userId) => {
+  if (!tenantSlug || !userId || !S3_BUCKET || !S3_REGION) return null;
 
-  const prefix = `${S3_IMAGES_PREFIX}/${userId}/images/`;
+  const prefix = `${S3_IMAGES_PREFIX}/${tenantSlug}/${userId}/images/`;
   return (
     `https://s3.console.aws.amazon.com/s3/buckets/${S3_BUCKET}` +
     `?region=${encodeURIComponent(S3_REGION)}` +
@@ -174,7 +176,8 @@ const AppUserPanel = () => {
     () => formatDateTime(initialData?.updatedAt),
     [initialData?.updatedAt]
   );
-  const userImagesUrl = useMemo(() => buildS3ConsoleFolderUrl(userId), [userId]);
+  const tenantSlug = initialData?.tenant?.slug;
+  const userImagesUrl = useMemo(() => buildS3ConsoleFolderUrl(tenantSlug, userId), [tenantSlug, userId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -246,6 +249,13 @@ const AppUserPanel = () => {
         <Typography variant="pi" textColor="neutral600">
           User Timeline
         </Typography>
+
+        <Box>
+          <Typography variant="omega" textColor="neutral600">
+            Tenant
+          </Typography>
+          <Typography variant="pi">{initialData?.tenant?.name || 'Not assigned'}</Typography>
+        </Box>
 
         <Box>
           <Typography variant="omega" textColor="neutral600">
@@ -553,14 +563,24 @@ const BulkClearActions = () => {
   const toggleNotification = useNotification();
   const match = useRouteMatch('/content-manager/collectionType/:slug');
   const slug = match?.params?.slug;
-  const isSupportedList = slug === APP_USER_UID || slug === CONTACT_UID;
+  const isSupportedList =
+    slug === APP_USER_UID || slug === CONTACT_UID || slug === TENANT_UID || slug === TENANT_ADMIN_UID;
   if (!isSupportedList) return null;
 
   const isUserList = slug === APP_USER_UID;
-  const label = isUserList ? 'Clear All Users' : 'Clear All Contacts';
+  const isContactList = slug === CONTACT_UID;
+  const label = isUserList
+    ? 'Clear All Users'
+    : isContactList
+      ? 'Clear All Contacts'
+      : 'Not Allowed';
   const confirmText = isUserList
     ? 'Clear ALL Users? This will also delete all related Contacts, local profile images, and the users\' S3 gallery images.'
-    : 'Clear ALL Contacts?';
+    : isContactList
+      ? 'Clear ALL Contacts?'
+      : '';
+
+  if (!isUserList && !isContactList) return null;
 
   const clearAllEntries = async () => {
     if (isClearing) return;

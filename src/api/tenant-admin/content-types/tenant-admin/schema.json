@@ -1,0 +1,35 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenant_admins",
+  "info": {
+    "singularName": "tenant-admin",
+    "pluralName": "tenant-admins",
+    "displayName": "Tenant Admin",
+    "description": "Assigns a Strapi admin user to one tenant"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "admin_user_id": {
+      "type": "integer",
+      "required": true
+    },
+    "admin_email": {
+      "type": "email"
+    },
+    "role": {
+      "type": "enumeration",
+      "enum": [
+        "tenant_admin"
+      ],
+      "default": "tenant_admin"
+    },
+    "tenant": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::tenant.tenant",
+      "required": true
+    }
+  }
+}

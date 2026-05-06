@@ -3,6 +3,10 @@
 const fs = require('fs/promises');
 const path = require('path');
 const AWS = require('aws-sdk');
+const {
+  buildTenantLocalImagePath,
+  buildTenantUserImagePrefix,
+} = require('../../../../utils/tenant-access');
 
 const CONTACT_UID = 'api::contact.contact';
 
@@ -30,11 +34,11 @@ const extractDeleteId = (where) => {
   return extractEntityId(where);
 };
 
-const deleteS3Prefix = async (userId) => {
+const deleteS3Prefix = async (tenant, userId) => {
   const bucket = process.env.S3_BUCKET_NAME;
   const region = process.env.AWS_REGION;
   const prefixBase = process.env.S3_IMAGES_PREFIX || 'users';
-  const prefix = `${prefixBase}/${userId}/images/`;
+  const prefix = `${buildTenantUserImagePrefix(tenant, userId, prefixBase)}/`;
 
   if (!bucket || !region) {
     return;
@@ -72,12 +76,12 @@ const deleteS3Prefix = async (userId) => {
   } while (continuationToken);
 };
 
-const deleteLocalUserImages = async (userId) => {
+const deleteLocalUserImages = async (tenant, userId) => {
   const targetDir = path.join(
     strapi.dirs.static.public,
     'uploads',
     'user-images',
-    String(userId)
+    buildTenantLocalImagePath(tenant, userId)
   );
 
   await fs.rm(targetDir, { recursive: true, force: true });
@@ -141,8 +145,17 @@ module.exports = {
     const userId = extractDeleteId(event.params?.where);
     if (!userId) return;
 
-    await deleteS3Prefix(userId);
-    await deleteLocalUserImages(userId);
+    const existingUser = await strapi.entityService.findOne('api::app-user.app-user', userId, {
+      fields: ['id'],
+      populate: {
+        tenant: {
+          fields: ['id', 'slug', 'name'],
+        },
+      },
+    });
+
+    await deleteS3Prefix(existingUser?.tenant, userId);
+    await deleteLocalUserImages(existingUser?.tenant, userId);
     await deleteRelatedContacts(userId);
   },
 };

@@ -1,0 +1,54 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tenants",
+  "info": {
+    "singularName": "tenant",
+    "pluralName": "tenants",
+    "displayName": "Tenant",
+    "description": "White-label tenant configuration"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "name": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "name",
+      "required": true,
+      "unique": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active"
+    },
+    "app_api_key": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "app_display_name": {
+      "type": "string"
+    },
+    "android_application_id": {
+      "type": "string"
+    },
+    "brand_logo_text": {
+      "type": "string"
+    },
+    "primary_color": {
+      "type": "string"
+    },
+    "support_email": {
+      "type": "email"
+    }
+  }
+}
