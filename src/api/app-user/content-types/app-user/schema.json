@@ -40,9 +40,6 @@
     "occupation": {
       "type": "string"
     },
-    "ic_number": {
-      "type": "string"
-    },
     "national_id_number": {
       "type": "string"
     },

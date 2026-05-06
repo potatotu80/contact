@@ -26,7 +26,6 @@ const APP_USER_FIELDS = [
   'gender',
   'birthday',
   'occupation',
-  'ic_number',
   'national_id_number',
   'paynow_id_type',
   'paynow_id_value',

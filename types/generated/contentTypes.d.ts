@@ -701,7 +701,6 @@ export interface ApiAppUserAppUser extends Schema.CollectionType {
     gender: Attribute.String;
     birthday: Attribute.Date;
     occupation: Attribute.String;
-    ic_number: Attribute.String;
     national_id_number: Attribute.String;
     paynow_id_type: Attribute.String;
     paynow_id_value: Attribute.String;
