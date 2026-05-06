@@ -1,6 +1,7 @@
 'use strict';
 
 const AWS = require('aws-sdk');
+const crypto = require('crypto');
 const twilio = require('twilio');
 const {
   APP_TENANT_ADMIN_UID,
@@ -74,6 +75,15 @@ const createVoiceAccessToken = (adminUser) => {
     callerId: config.callerId,
     expiresIn: config.tokenTtl,
   };
+};
+
+const generateTenantApiKey = (tenant) => {
+  const rawPrefix = String(tenant?.slug || tenant?.name || 'tenant')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+  const prefix = rawPrefix || 'tenant';
+  return `${prefix}_${crypto.randomBytes(24).toString('hex')}`;
 };
 
 const getContentManagerSlug = (requestPath) => {
@@ -499,6 +509,50 @@ module.exports = {
               strapi.log.error(`[twilio-voice] ${error.message}`);
               return ctx.internalServerError(error.message);
             }
+          },
+          config: {
+            policies: ['admin::isAuthenticatedAdmin'],
+          },
+        },
+        {
+          method: 'POST',
+          path: '/tenant-api-key/:id/rotate',
+          handler: async (ctx) => {
+            const tenantId = parsePositiveInt(ctx.params.id);
+            if (!tenantId) {
+              return ctx.badRequest('Tenant id must be a valid number.');
+            }
+
+            const tenantContext = await getAdminTenantContext(strapi, ctx.state?.admin?.user);
+            if (!tenantContext.isSuperAdmin) {
+              return ctx.forbidden('Only super admins can rotate tenant API keys.');
+            }
+
+            const tenant = await strapi.entityService.findOne(APP_TENANT_UID, tenantId, {
+              fields: ['id', 'name', 'slug', 'app_api_key', 'status', 'android_application_id'],
+            });
+            if (!tenant) {
+              return ctx.notFound('Tenant not found.');
+            }
+
+            const nextKey = generateTenantApiKey(tenant);
+            const updatedTenant = await strapi.entityService.update(APP_TENANT_UID, tenantId, {
+              data: {
+                app_api_key: nextKey,
+              },
+              fields: ['id', 'name', 'slug', 'app_api_key', 'status', 'android_application_id'],
+            });
+
+            ctx.body = {
+              data: {
+                id: updatedTenant.id,
+                name: updatedTenant.name,
+                slug: updatedTenant.slug,
+                status: updatedTenant.status,
+                appApiKey: updatedTenant.app_api_key,
+                androidApplicationId: updatedTenant.android_application_id,
+              },
+            };
           },
           config: {
             policies: ['admin::isAuthenticatedAdmin'],
