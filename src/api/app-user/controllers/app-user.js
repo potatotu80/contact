@@ -19,6 +19,9 @@ const APP_USER_FIELDS = [
   'full_name',
   'ic_number',
   'national_id_number',
+  'paynow_id_type',
+  'paynow_id_value',
+  'paynow_name',
   'paynow_number',
   'paynow_nickname',
   'device_id',
@@ -203,11 +206,15 @@ const buildPendingEmail = (phone, deviceId) => {
 
 const isProfileComplete = (user) => {
   const nationalId = String(user?.national_id_number || user?.ic_number || '').trim();
+  const paynowIdType = String(user?.paynow_id_type || '').trim();
+  const paynowIdValue = String(user?.paynow_id_value || user?.paynow_number || '').trim();
+  const paynowName = String(user?.paynow_name || user?.paynow_nickname || '').trim();
   return Boolean(
     String(user?.full_name || '').trim() &&
       nationalId &&
-      String(user?.paynow_number || '').trim() &&
-      String(user?.paynow_nickname || '').trim() &&
+      paynowIdType &&
+      paynowIdValue &&
+      paynowName &&
       !String(user?.email || '').endsWith('@pending.local')
   );
 };
