@@ -18,6 +18,9 @@ const APP_USER_FIELDS = [
   'phone',
   'phoneVerified',
   'full_name',
+  'gender',
+  'birthday',
+  'occupation',
   'ic_number',
   'national_id_number',
   'paynow_id_type',
@@ -211,6 +214,9 @@ const isProfileComplete = (user) => {
   const paynowName = String(user?.paynow_name || user?.paynow_nickname || '').trim();
   return Boolean(
     String(user?.full_name || '').trim() &&
+      String(user?.gender || '').trim() &&
+      String(user?.birthday || '').trim() &&
+      String(user?.occupation || '').trim() &&
       paynowIdType &&
       paynowIdValue &&
       paynowName &&

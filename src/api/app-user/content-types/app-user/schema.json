@@ -26,6 +26,15 @@
     "full_name": {
       "type": "string"
     },
+    "gender": {
+      "type": "string"
+    },
+    "birthday": {
+      "type": "date"
+    },
+    "occupation": {
+      "type": "string"
+    },
     "ic_number": {
       "type": "string"
     },
