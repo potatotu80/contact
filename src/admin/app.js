@@ -50,6 +50,10 @@ const buildCollectionTypeListUrl = (slug, queryParams = {}) => {
 const DEFAULT_TENANT_COLOR = '#4D2C91';
 const MANAGED_API_KEY_PLACEHOLDER = 'Auto-generated on save';
 const TENANT_ROUTE_FRAGMENT = '/content-manager/collectionType/api::tenant.tenant';
+const tenantRouteState = {
+  observer: null,
+  intervalId: null,
+};
 
 const normalizeHexColor = (value) => {
   const trimmed = String(value || '').trim();
@@ -68,6 +72,16 @@ const resolveMediaUrl = (media) => {
 };
 
 const isTenantContentRoute = () => window.location.pathname.includes(TENANT_ROUTE_FRAGMENT);
+
+const setNativeInputValue = (element, value) => {
+  if (!element) return;
+
+  const prototype = Object.getPrototypeOf(element);
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, 'value');
+  descriptor?.set?.call(element, value);
+  element.dispatchEvent(new Event('input', { bubbles: true }));
+  element.dispatchEvent(new Event('change', { bubbles: true }));
+};
 
 const findFieldInput = (fieldName) => {
   const directMatch = document.querySelector(
@@ -94,11 +108,19 @@ const findFieldInput = (fieldName) => {
 };
 
 const enhanceTenantFormFields = () => {
+  if (!isTenantContentRoute()) {
+    return;
+  }
+
   const apiKeyInput = findFieldInput('app_api_key');
   if (apiKeyInput) {
+    if (!String(apiKeyInput.value || '').trim()) {
+      setNativeInputValue(apiKeyInput, MANAGED_API_KEY_PLACEHOLDER);
+    }
+
     apiKeyInput.readOnly = true;
-    apiKeyInput.disabled = true;
     apiKeyInput.setAttribute('aria-readonly', 'true');
+    apiKeyInput.placeholder = MANAGED_API_KEY_PLACEHOLDER;
     apiKeyInput.setAttribute('title', 'Use the Tenant Security panel to copy or rotate this key.');
     apiKeyInput.style.backgroundColor = '#f6f6f9';
     apiKeyInput.style.cursor = 'not-allowed';
@@ -106,13 +128,48 @@ const enhanceTenantFormFields = () => {
 
   const primaryColorInput = findFieldInput('primary_color');
   if (primaryColorInput) {
+    const nextColor = normalizeHexColor(primaryColorInput.value);
+    if (primaryColorInput.value !== nextColor) {
+      setNativeInputValue(primaryColorInput, nextColor);
+    }
+
     primaryColorInput.type = 'color';
-    primaryColorInput.value = normalizeHexColor(primaryColorInput.value);
     primaryColorInput.style.padding = '2px';
     primaryColorInput.style.width = '100%';
     primaryColorInput.style.minHeight = '40px';
     primaryColorInput.style.cursor = 'pointer';
   }
+};
+
+const startTenantFormEnhancer = () => {
+  if (typeof window === 'undefined') return;
+
+  const refreshEnhancer = () => {
+    if (!isTenantContentRoute()) {
+      return;
+    }
+
+    enhanceTenantFormFields();
+  };
+
+  tenantRouteState.observer?.disconnect?.();
+  if (tenantRouteState.intervalId) {
+    window.clearInterval(tenantRouteState.intervalId);
+  }
+
+  refreshEnhancer();
+
+  tenantRouteState.observer = new MutationObserver(() => {
+    refreshEnhancer();
+  });
+
+  tenantRouteState.observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
+
+  tenantRouteState.intervalId = window.setInterval(refreshEnhancer, 750);
+  window.addEventListener('popstate', refreshEnhancer);
 };
 
 const normalizePhone = (value) => {
@@ -1011,6 +1068,8 @@ const config = {
 };
 
 const bootstrap = (app) => {
+  startTenantFormEnhancer();
+
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'voice-call-panel',
     Component: VoiceCallPanel,
