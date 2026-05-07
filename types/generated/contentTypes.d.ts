@@ -833,6 +833,7 @@ export interface ApiTenantTenant extends Schema.CollectionType {
     app_api_key: Attribute.String & Attribute.Required & Attribute.Unique;
     app_display_name: Attribute.String;
     android_application_id: Attribute.String;
+    brand_logo: Attribute.Media;
     brand_logo_text: Attribute.String;
     primary_color: Attribute.String;
     support_email: Attribute.Email;

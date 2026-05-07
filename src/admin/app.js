@@ -47,6 +47,24 @@ const buildCollectionTypeListUrl = (slug, queryParams = {}) => {
   return url.toString();
 };
 
+const DEFAULT_TENANT_COLOR = '#4D2C91';
+
+const normalizeHexColor = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return DEFAULT_TENANT_COLOR;
+
+  const normalized = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+  return /^#[0-9A-Fa-f]{6}$/.test(normalized) ? normalized.toUpperCase() : DEFAULT_TENANT_COLOR;
+};
+
+const resolveMediaUrl = (media) => {
+  const entry = Array.isArray(media) ? media[0] : media;
+  if (!entry?.url) return null;
+
+  if (/^https?:\/\//i.test(entry.url)) return entry.url;
+  return `${window.location.origin}${entry.url}`;
+};
+
 const normalizePhone = (value) => {
   const trimmed = String(value || '').trim();
   if (!trimmed) return '';
@@ -691,6 +709,115 @@ const TenantSecurityPanel = () => {
   );
 };
 
+const TenantBrandingPanel = () => {
+  const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
+
+  if (slug !== TENANT_UID || !initialData?.id) return null;
+
+  const primaryColor = normalizeHexColor(modifiedData?.primary_color || initialData?.primary_color);
+  const logoUrl = resolveMediaUrl(modifiedData?.brand_logo || initialData?.brand_logo);
+
+  const handleColorChange = (event) => {
+    onChange({
+      target: {
+        name: 'primary_color',
+        value: event.target.value.toUpperCase(),
+        type: 'string',
+      },
+    });
+  };
+
+  return (
+    <Box
+      background="neutral0"
+      borderColor="neutral200"
+      hasRadius
+      padding={4}
+      shadow="tableShadow"
+    >
+      <Flex direction="column" gap={3}>
+        <Typography variant="pi" textColor="neutral600">
+          Tenant Branding
+        </Typography>
+
+        <Box>
+          <Typography variant="omega" textColor="neutral600">
+            Brand Logo
+          </Typography>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={`${initialData?.name || 'Tenant'} logo`}
+              style={{
+                display: 'block',
+                width: '100%',
+                maxWidth: '180px',
+                maxHeight: '120px',
+                objectFit: 'contain',
+                border: '1px solid #dcdce4',
+                borderRadius: '8px',
+                padding: '12px',
+                background: '#ffffff',
+                marginTop: '8px',
+              }}
+            />
+          ) : (
+            <Typography variant="pi" textColor="neutral500">
+              No logo uploaded yet.
+            </Typography>
+          )}
+        </Box>
+
+        <Typography variant="omega" textColor="neutral500">
+          Upload or replace the tenant logo using the main form&apos;s `Brand Logo` media field.
+        </Typography>
+
+        <Box>
+          <Typography variant="omega" textColor="neutral600">
+            Primary Color
+          </Typography>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginTop: '8px',
+            }}
+          >
+            <input
+              type="color"
+              value={primaryColor}
+              onChange={handleColorChange}
+              aria-label="Primary color picker"
+              style={{
+                width: '48px',
+                height: '36px',
+                padding: 0,
+                border: '1px solid #dcdce4',
+                borderRadius: '8px',
+                background: '#ffffff',
+                cursor: 'pointer',
+              }}
+            />
+            <Typography
+              variant="pi"
+              style={{
+                fontFamily: 'monospace',
+              }}
+            >
+              {primaryColor}
+            </Typography>
+          </div>
+        </Box>
+
+        <Typography variant="omega" textColor="neutral500">
+          Pick the tenant&apos;s brand color here instead of typing the hex value manually.
+        </Typography>
+      </Flex>
+    </Box>
+  );
+};
+
 const BulkClearActions = () => {
   const [isClearing, setIsClearing] = useState(false);
   const { get, del } = useFetchClient();
@@ -776,6 +903,11 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'tenant-security-panel',
     Component: TenantSecurityPanel,
+  });
+
+  app.injectContentManagerComponent('editView', 'right-links', {
+    name: 'tenant-branding-panel',
+    Component: TenantBrandingPanel,
   });
 
   app.injectContentManagerComponent('listView', 'actions', {

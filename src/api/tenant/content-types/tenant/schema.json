@@ -41,6 +41,13 @@
     "android_application_id": {
       "type": "string"
     },
+    "brand_logo": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "images"
+      ]
+    },
     "brand_logo_text": {
       "type": "string"
     },
