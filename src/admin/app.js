@@ -49,6 +49,7 @@ const buildCollectionTypeListUrl = (slug, queryParams = {}) => {
 
 const DEFAULT_TENANT_COLOR = '#4D2C91';
 const MANAGED_API_KEY_PLACEHOLDER = 'Auto-generated on save';
+const TENANT_ROUTE_FRAGMENT = '/content-manager/collectionType/api::tenant.tenant';
 
 const normalizeHexColor = (value) => {
   const trimmed = String(value || '').trim();
@@ -66,17 +67,44 @@ const resolveMediaUrl = (media) => {
   return `${window.location.origin}${entry.url}`;
 };
 
+const isTenantContentRoute = () => window.location.pathname.includes(TENANT_ROUTE_FRAGMENT);
+
+const findFieldInput = (fieldName) => {
+  const directMatch = document.querySelector(
+    `input[name="${fieldName}"], textarea[name="${fieldName}"], [name="${fieldName}"] input`
+  );
+  if (directMatch) return directMatch;
+
+  const labels = Array.from(document.querySelectorAll('label'));
+  const matchingLabel = labels.find((label) =>
+    String(label.textContent || '')
+      .replace(/\*/g, '')
+      .trim()
+      .toLowerCase() === fieldName.toLowerCase()
+  );
+
+  if (!matchingLabel) return null;
+
+  const fieldContainer =
+    matchingLabel.closest('[data-strapi-field]') ||
+    matchingLabel.parentElement?.parentElement ||
+    matchingLabel.parentElement;
+
+  return fieldContainer?.querySelector('input, textarea') || null;
+};
+
 const enhanceTenantFormFields = () => {
-  const apiKeyInput = document.querySelector('input[name="app_api_key"]');
+  const apiKeyInput = findFieldInput('app_api_key');
   if (apiKeyInput) {
     apiKeyInput.readOnly = true;
+    apiKeyInput.disabled = true;
     apiKeyInput.setAttribute('aria-readonly', 'true');
     apiKeyInput.setAttribute('title', 'Use the Tenant Security panel to copy or rotate this key.');
     apiKeyInput.style.backgroundColor = '#f6f6f9';
     apiKeyInput.style.cursor = 'not-allowed';
   }
 
-  const primaryColorInput = document.querySelector('input[name="primary_color"]');
+  const primaryColorInput = findFieldInput('primary_color');
   if (primaryColorInput) {
     primaryColorInput.type = 'color';
     primaryColorInput.value = normalizeHexColor(primaryColorInput.value);
@@ -603,12 +631,13 @@ const TenantSecurityPanel = () => {
   const toggleNotification = useNotification();
   const [apiKey, setApiKey] = useState(initialData?.app_api_key || '');
   const [isRotating, setIsRotating] = useState(false);
+  const isTenantScreen = slug === TENANT_UID || isTenantContentRoute();
 
   useEffect(() => {
     setApiKey(initialData?.app_api_key || '');
   }, [initialData?.app_api_key, initialData?.id]);
 
-  if (slug !== TENANT_UID) return null;
+  if (!isTenantScreen) return null;
 
   if (!initialData?.id) {
     return (
@@ -759,8 +788,9 @@ const TenantSecurityPanel = () => {
 
 const TenantBrandingPanel = () => {
   const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
+  const isTenantScreen = slug === TENANT_UID || isTenantContentRoute();
 
-  if (slug !== TENANT_UID) return null;
+  if (!isTenantScreen) return null;
 
   const primaryColor = normalizeHexColor(modifiedData?.primary_color || initialData?.primary_color);
   const logoUrl = resolveMediaUrl(modifiedData?.brand_logo || initialData?.brand_logo);
@@ -868,9 +898,10 @@ const TenantBrandingPanel = () => {
 
 const TenantFormEnhancer = () => {
   const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
+  const isTenantScreen = slug === TENANT_UID || isTenantContentRoute();
 
   useEffect(() => {
-    if (slug !== TENANT_UID) return undefined;
+    if (!isTenantScreen) return undefined;
 
     if (!initialData?.id && !String(modifiedData?.app_api_key || '').trim()) {
       onChange({
@@ -903,7 +934,7 @@ const TenantFormEnhancer = () => {
     });
 
     return () => observer.disconnect();
-  }, [slug, initialData?.id, modifiedData?.app_api_key, modifiedData?.primary_color, onChange]);
+  }, [isTenantScreen, initialData?.id, modifiedData?.app_api_key, modifiedData?.primary_color, onChange]);
 
   return null;
 };
