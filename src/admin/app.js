@@ -48,6 +48,7 @@ const buildCollectionTypeListUrl = (slug, queryParams = {}) => {
 };
 
 const DEFAULT_TENANT_COLOR = '#4D2C91';
+const MANAGED_API_KEY_PLACEHOLDER = 'Auto-generated on save';
 
 const normalizeHexColor = (value) => {
   const trimmed = String(value || '').trim();
@@ -607,7 +608,33 @@ const TenantSecurityPanel = () => {
     setApiKey(initialData?.app_api_key || '');
   }, [initialData?.app_api_key, initialData?.id]);
 
-  if (slug !== TENANT_UID || !initialData?.id) return null;
+  if (slug !== TENANT_UID) return null;
+
+  if (!initialData?.id) {
+    return (
+      <Box
+        background="neutral0"
+        borderColor="neutral200"
+        hasRadius
+        padding={4}
+        shadow="tableShadow"
+      >
+        <Flex direction="column" gap={3}>
+          <Typography variant="pi" textColor="neutral600">
+            Tenant Security
+          </Typography>
+
+          <Typography variant="omega" textColor="neutral500">
+            The tenant API key will be generated automatically when you save this tenant for the first time.
+          </Typography>
+
+          <Typography variant="omega" textColor="neutral500">
+            After the first save, come back here to copy or rotate the active API key.
+          </Typography>
+        </Flex>
+      </Box>
+    );
+  }
 
   const copyApiKey = async () => {
     if (!apiKey) {
@@ -733,7 +760,7 @@ const TenantSecurityPanel = () => {
 const TenantBrandingPanel = () => {
   const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
 
-  if (slug !== TENANT_UID || !initialData?.id) return null;
+  if (slug !== TENANT_UID) return null;
 
   const primaryColor = normalizeHexColor(modifiedData?.primary_color || initialData?.primary_color);
   const logoUrl = resolveMediaUrl(modifiedData?.brand_logo || initialData?.brand_logo);
@@ -840,10 +867,30 @@ const TenantBrandingPanel = () => {
 };
 
 const TenantFormEnhancer = () => {
-  const { slug, initialData } = useCMEditViewDataManager();
+  const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
 
   useEffect(() => {
-    if (slug !== TENANT_UID || !initialData?.id) return undefined;
+    if (slug !== TENANT_UID) return undefined;
+
+    if (!initialData?.id && !String(modifiedData?.app_api_key || '').trim()) {
+      onChange({
+        target: {
+          name: 'app_api_key',
+          value: MANAGED_API_KEY_PLACEHOLDER,
+          type: 'string',
+        },
+      });
+    }
+
+    if (!String(modifiedData?.primary_color || '').trim()) {
+      onChange({
+        target: {
+          name: 'primary_color',
+          value: DEFAULT_TENANT_COLOR,
+          type: 'string',
+        },
+      });
+    }
 
     enhanceTenantFormFields();
     const observer = new MutationObserver(() => {
@@ -856,7 +903,7 @@ const TenantFormEnhancer = () => {
     });
 
     return () => observer.disconnect();
-  }, [slug, initialData?.id]);
+  }, [slug, initialData?.id, modifiedData?.app_api_key, modifiedData?.primary_color, onChange]);
 
   return null;
 };
