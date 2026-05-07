@@ -1,24 +1,54 @@
 'use strict';
 
-const { generateTenantApiKey } = require('../../../../utils/tenant-api-key');
+const { generateTenantApiKey, isGeneratedTenantApiKey } = require('../../../../utils/tenant-api-key');
 
-const ensureTenantApiKey = (event) => {
+const MANAGED_API_KEY_PLACEHOLDER = 'Auto-generated on save';
+
+const shouldReplaceTenantApiKey = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return true;
+  }
+
+  if (normalized === MANAGED_API_KEY_PLACEHOLDER) {
+    return true;
+  }
+
+  return !isGeneratedTenantApiKey(normalized);
+};
+
+const ensureTenantApiKeyOnCreate = (event) => {
   const data = event.params?.data;
   if (!data || typeof data !== 'object') {
     return;
   }
 
-  if (!String(data.app_api_key || '').trim()) {
+  if (shouldReplaceTenantApiKey(data.app_api_key)) {
+    data.app_api_key = generateTenantApiKey(data);
+  }
+};
+
+const ensureTenantApiKeyOnUpdate = (event) => {
+  const data = event.params?.data;
+  if (!data || typeof data !== 'object') {
+    return;
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(data, 'app_api_key')) {
+    return;
+  }
+
+  if (shouldReplaceTenantApiKey(data.app_api_key)) {
     data.app_api_key = generateTenantApiKey(data);
   }
 };
 
 module.exports = {
   beforeCreate(event) {
-    ensureTenantApiKey(event);
+    ensureTenantApiKeyOnCreate(event);
   },
 
   beforeUpdate(event) {
-    ensureTenantApiKey(event);
+    ensureTenantApiKeyOnUpdate(event);
   },
 };

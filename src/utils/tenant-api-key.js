@@ -1,6 +1,9 @@
 'use strict';
 
 const crypto = require('crypto');
+const TENANT_API_KEY_PATTERN = /^[a-z0-9]+_[a-f0-9]{48}$/;
+
+const isGeneratedTenantApiKey = (value) => TENANT_API_KEY_PATTERN.test(String(value || '').trim());
 
 const generateTenantApiKey = (tenant) => {
   const rawPrefix = String(tenant?.slug || tenant?.name || 'tenant')
@@ -13,4 +16,5 @@ const generateTenantApiKey = (tenant) => {
 
 module.exports = {
   generateTenantApiKey,
+  isGeneratedTenantApiKey,
 };
