@@ -108,6 +108,22 @@ const setRequestData = (ctx, nextData) => {
   ctx.request.body = nextData;
 };
 
+const stripManagedTenantFields = (ctx, slug) => {
+  if (slug !== APP_TENANT_UID) {
+    return;
+  }
+
+  const data = getRequestData(ctx);
+  if (!data || typeof data !== 'object') {
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(data, 'app_api_key')) {
+    delete data.app_api_key;
+    setRequestData(ctx, data);
+  }
+};
+
 const withAdminTenantFilter = (ctx, tenantIds) => {
   const tenantFilter = getTenantIdsFilter(tenantIds);
   if (!ctx.query.filters || Object.keys(ctx.query.filters).length === 0) {
@@ -411,6 +427,10 @@ module.exports = {
       const slug = getContentManagerSlug(ctx.request.path || '');
       if (!slug) {
         return next();
+      }
+
+      if ((ctx.method === 'POST' || ctx.method === 'PUT') && slug === APP_TENANT_UID) {
+        stripManagedTenantFields(ctx, slug);
       }
 
       const tenantContext = await getAdminTenantContext(strapi, adminUser);

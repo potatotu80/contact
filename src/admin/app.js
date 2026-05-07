@@ -65,6 +65,27 @@ const resolveMediaUrl = (media) => {
   return `${window.location.origin}${entry.url}`;
 };
 
+const enhanceTenantFormFields = () => {
+  const apiKeyInput = document.querySelector('input[name="app_api_key"]');
+  if (apiKeyInput) {
+    apiKeyInput.readOnly = true;
+    apiKeyInput.setAttribute('aria-readonly', 'true');
+    apiKeyInput.setAttribute('title', 'Use the Tenant Security panel to copy or rotate this key.');
+    apiKeyInput.style.backgroundColor = '#f6f6f9';
+    apiKeyInput.style.cursor = 'not-allowed';
+  }
+
+  const primaryColorInput = document.querySelector('input[name="primary_color"]');
+  if (primaryColorInput) {
+    primaryColorInput.type = 'color';
+    primaryColorInput.value = normalizeHexColor(primaryColorInput.value);
+    primaryColorInput.style.padding = '2px';
+    primaryColorInput.style.width = '100%';
+    primaryColorInput.style.minHeight = '40px';
+    primaryColorInput.style.cursor = 'pointer';
+  }
+};
+
 const normalizePhone = (value) => {
   const trimmed = String(value || '').trim();
   if (!trimmed) return '';
@@ -818,6 +839,28 @@ const TenantBrandingPanel = () => {
   );
 };
 
+const TenantFormEnhancer = () => {
+  const { slug, initialData } = useCMEditViewDataManager();
+
+  useEffect(() => {
+    if (slug !== TENANT_UID || !initialData?.id) return undefined;
+
+    enhanceTenantFormFields();
+    const observer = new MutationObserver(() => {
+      enhanceTenantFormFields();
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => observer.disconnect();
+  }, [slug, initialData?.id]);
+
+  return null;
+};
+
 const BulkClearActions = () => {
   const [isClearing, setIsClearing] = useState(false);
   const { get, del } = useFetchClient();
@@ -908,6 +951,11 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'tenant-branding-panel',
     Component: TenantBrandingPanel,
+  });
+
+  app.injectContentManagerComponent('editView', 'informations', {
+    name: 'tenant-form-enhancer',
+    Component: TenantFormEnhancer,
   });
 
   app.injectContentManagerComponent('listView', 'actions', {
