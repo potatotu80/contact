@@ -1,8 +1,8 @@
 'use strict';
 
 const AWS = require('aws-sdk');
-const crypto = require('crypto');
 const twilio = require('twilio');
+const { generateTenantApiKey } = require('./utils/tenant-api-key');
 const {
   APP_TENANT_ADMIN_UID,
   APP_TENANT_UID,
@@ -75,15 +75,6 @@ const createVoiceAccessToken = (adminUser) => {
     callerId: config.callerId,
     expiresIn: config.tokenTtl,
   };
-};
-
-const generateTenantApiKey = (tenant) => {
-  const rawPrefix = String(tenant?.slug || tenant?.name || 'tenant')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
-  const prefix = rawPrefix || 'tenant';
-  return `${prefix}_${crypto.randomBytes(24).toString('hex')}`;
 };
 
 const getContentManagerSlug = (requestPath) => {

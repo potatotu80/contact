@@ -33,7 +33,12 @@
     "app_api_key": {
       "type": "string",
       "required": true,
-      "unique": true
+      "unique": true,
+      "pluginOptions": {
+        "content-manager": {
+          "visible": false
+        }
+      }
     },
     "app_display_name": {
       "type": "string"
