@@ -138,6 +138,20 @@ const enhanceTenantFormFields = () => {
     primaryColorInput.style.width = '100%';
     primaryColorInput.style.minHeight = '40px';
     primaryColorInput.style.cursor = 'pointer';
+
+    const hexIndicatorId = 'tenant-primary-color-hex-indicator';
+    let hexIndicator = document.getElementById(hexIndicatorId);
+    if (!hexIndicator) {
+      hexIndicator = document.createElement('div');
+      hexIndicator.id = hexIndicatorId;
+      hexIndicator.style.marginTop = '6px';
+      hexIndicator.style.fontFamily = 'monospace';
+      hexIndicator.style.fontSize = '12px';
+      hexIndicator.style.color = '#666687';
+      primaryColorInput.parentElement?.appendChild(hexIndicator);
+    }
+
+    hexIndicator.textContent = nextColor;
   }
 };
 
@@ -943,6 +957,20 @@ const TenantBrandingPanel = () => {
               {primaryColor}
             </Typography>
           </div>
+        </Box>
+
+        <Box>
+          <Typography variant="omega" textColor="neutral600">
+            Primary Color Hex
+          </Typography>
+          <Typography
+            variant="pi"
+            style={{
+              fontFamily: 'monospace',
+            }}
+          >
+            {primaryColor}
+          </Typography>
         </Box>
 
         <Typography variant="omega" textColor="neutral500">
