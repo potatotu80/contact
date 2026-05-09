@@ -981,49 +981,6 @@ const TenantBrandingPanel = () => {
   );
 };
 
-const TenantFormEnhancer = () => {
-  const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
-  const isTenantScreen = slug === TENANT_UID || isTenantContentRoute();
-
-  useEffect(() => {
-    if (!isTenantScreen) return undefined;
-
-    if (!initialData?.id && !String(modifiedData?.app_api_key || '').trim()) {
-      onChange({
-        target: {
-          name: 'app_api_key',
-          value: MANAGED_API_KEY_PLACEHOLDER,
-          type: 'string',
-        },
-      });
-    }
-
-    if (!String(modifiedData?.primary_color || '').trim()) {
-      onChange({
-        target: {
-          name: 'primary_color',
-          value: DEFAULT_TENANT_COLOR,
-          type: 'string',
-        },
-      });
-    }
-
-    enhanceTenantFormFields();
-    const observer = new MutationObserver(() => {
-      enhanceTenantFormFields();
-    });
-
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-
-    return () => observer.disconnect();
-  }, [isTenantScreen, initialData?.id, modifiedData?.app_api_key, modifiedData?.primary_color, onChange]);
-
-  return null;
-};
-
 const BulkClearActions = () => {
   const [isClearing, setIsClearing] = useState(false);
   const { get, del } = useFetchClient();
@@ -1116,11 +1073,6 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'tenant-branding-panel',
     Component: TenantBrandingPanel,
-  });
-
-  app.injectContentManagerComponent('editView', 'informations', {
-    name: 'tenant-form-enhancer',
-    Component: TenantFormEnhancer,
   });
 
   app.injectContentManagerComponent('listView', 'actions', {
