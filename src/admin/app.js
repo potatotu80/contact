@@ -566,16 +566,32 @@ const normalizeHexColor = (value) => {
 };
 
 const ReadOnlyField = ({ label, value, monospace = false }) => (
-  <Box>
-    <Typography variant="omega" textColor="neutral600">
+  <Box
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'flex-start',
+      gap: '4px',
+    }}
+  >
+    <Typography
+      variant="omega"
+      textColor="neutral600"
+      style={{
+        display: 'block',
+        width: '100%',
+      }}
+    >
       {label}
     </Typography>
     <Typography
       variant="pi"
       style={{
-        marginTop: '4px',
+        display: 'block',
+        width: '100%',
         fontFamily: monospace ? 'monospace' : undefined,
         wordBreak: monospace ? 'break-all' : 'normal',
+        lineHeight: 1.5,
       }}
     >
       {value || 'Not set'}
