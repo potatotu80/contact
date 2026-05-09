@@ -565,6 +565,44 @@ const normalizeHexColor = (value) => {
   return /^#[0-9A-Fa-f]{6}$/.test(normalized) ? normalized.toUpperCase() : trimmed;
 };
 
+const findTenantFieldInput = (fieldName) =>
+  document.querySelector(
+    `input[name="${fieldName}"], textarea[name="${fieldName}"], [name="${fieldName}"] input`
+  );
+
+const useTenantFormEnhancements = (isTenantScreen) => {
+  useEffect(() => {
+    if (!isTenantScreen) {
+      return undefined;
+    }
+
+    const applyEnhancements = () => {
+      const apiKeyInput = findTenantFieldInput('app_api_key');
+      if (apiKeyInput) {
+        apiKeyInput.readOnly = true;
+        apiKeyInput.setAttribute('aria-readonly', 'true');
+        apiKeyInput.setAttribute('title', 'Use the Tenant Security panel to copy or rotate this key.');
+        apiKeyInput.style.backgroundColor = '#f6f6f9';
+        apiKeyInput.style.cursor = 'not-allowed';
+      }
+
+      const primaryColorInput = findTenantFieldInput('primary_color');
+      if (primaryColorInput) {
+        primaryColorInput.type = 'color';
+        primaryColorInput.value = normalizeHexColor(primaryColorInput.value || primaryColorInput.defaultValue);
+        primaryColorInput.style.padding = '2px';
+        primaryColorInput.style.minHeight = '40px';
+        primaryColorInput.style.cursor = 'pointer';
+      }
+    };
+
+    const intervalId = window.setInterval(applyEnhancements, 600);
+    applyEnhancements();
+
+    return () => window.clearInterval(intervalId);
+  }, [isTenantScreen]);
+};
+
 const ReadOnlyField = ({ label, value, monospace = false }) => (
   <Box
     style={{
@@ -601,7 +639,9 @@ const ReadOnlyField = ({ label, value, monospace = false }) => (
 
 const TenantColorPanel = () => {
   const { slug, initialData } = useCMEditViewDataManager();
-  if (slug !== TENANT_UID || !initialData?.id) return null;
+  const isTenantScreen = slug === TENANT_UID && !!initialData?.id;
+  useTenantFormEnhancements(isTenantScreen);
+  if (!isTenantScreen) return null;
 
   const primaryColor = normalizeHexColor(initialData?.primary_color);
 
@@ -630,12 +670,15 @@ const TenantKeyPanel = () => {
   const toggleNotification = useNotification();
   const [apiKey, setApiKey] = useState(initialData?.app_api_key || '');
   const [isRotating, setIsRotating] = useState(false);
+  const isTenantScreen = slug === TENANT_UID && !!initialData?.id;
+
+  useTenantFormEnhancements(isTenantScreen);
 
   useEffect(() => {
     setApiKey(initialData?.app_api_key || '');
   }, [initialData?.app_api_key, initialData?.id]);
 
-  if (slug !== TENANT_UID || !initialData?.id) return null;
+  if (!isTenantScreen) return null;
 
   const copyApiKey = async () => {
     if (!apiKey) {
