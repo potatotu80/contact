@@ -557,6 +557,167 @@ const VoiceCallPanel = () => {
   );
 };
 
+const normalizeHexColor = (value) => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return 'Not set';
+
+  const normalized = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+  return /^#[0-9A-Fa-f]{6}$/.test(normalized) ? normalized.toUpperCase() : trimmed;
+};
+
+const TenantColorPanel = () => {
+  const { slug, initialData } = useCMEditViewDataManager();
+  if (slug !== TENANT_UID || !initialData?.id) return null;
+
+  const primaryColor = normalizeHexColor(initialData?.primary_color);
+
+  return (
+    <Box
+      background="neutral0"
+      borderColor="neutral200"
+      hasRadius
+      padding={4}
+      shadow="tableShadow"
+    >
+      <Flex direction="column" gap={3}>
+        <Typography variant="pi" textColor="neutral600">
+          Tenant Branding
+        </Typography>
+
+        <Box>
+          <Typography variant="omega" textColor="neutral600">
+            Primary Color Hex
+          </Typography>
+          <Typography
+            variant="pi"
+            style={{
+              fontFamily: 'monospace',
+            }}
+          >
+            {primaryColor}
+          </Typography>
+        </Box>
+      </Flex>
+    </Box>
+  );
+};
+
+const TenantKeyPanel = () => {
+  const { slug, initialData } = useCMEditViewDataManager();
+  const { post } = useFetchClient();
+  const toggleNotification = useNotification();
+  const [apiKey, setApiKey] = useState(initialData?.app_api_key || '');
+  const [isRotating, setIsRotating] = useState(false);
+
+  useEffect(() => {
+    setApiKey(initialData?.app_api_key || '');
+  }, [initialData?.app_api_key, initialData?.id]);
+
+  if (slug !== TENANT_UID || !initialData?.id) return null;
+
+  const copyApiKey = async () => {
+    if (!apiKey) {
+      toggleNotification({
+        type: 'warning',
+        message: 'No tenant API key is available to copy.',
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(apiKey);
+      toggleNotification({
+        type: 'success',
+        message: 'Tenant API key copied.',
+      });
+    } catch (error) {
+      toggleNotification({
+        type: 'warning',
+        message: 'Unable to copy the tenant API key.',
+      });
+    }
+  };
+
+  const rotateApiKey = async () => {
+    const confirmed = window.confirm(
+      'Rotate this tenant API key? Existing installed apps using the old key will stop working until rebuilt.'
+    );
+    if (!confirmed) return;
+
+    try {
+      setIsRotating(true);
+      const response = await post(`/tenant-api-key/${initialData.id}/rotate`);
+      const nextKey = response?.data?.data?.appApiKey || '';
+      if (nextKey) {
+        setApiKey(nextKey);
+      }
+
+      toggleNotification({
+        type: 'success',
+        message: 'Tenant API key rotated.',
+      });
+    } catch (error) {
+      toggleNotification({
+        type: 'warning',
+        message: error?.message || 'Failed to rotate the tenant API key.',
+      });
+    } finally {
+      setIsRotating(false);
+    }
+  };
+
+  return (
+    <Box
+      background="neutral0"
+      borderColor="neutral200"
+      hasRadius
+      padding={4}
+      shadow="tableShadow"
+    >
+      <Flex direction="column" gap={3}>
+        <Typography variant="pi" textColor="neutral600">
+          Tenant Security
+        </Typography>
+
+        <Box>
+          <Typography variant="omega" textColor="neutral600">
+            Active API Key
+          </Typography>
+          <Typography
+            variant="pi"
+            style={{
+              wordBreak: 'break-all',
+              fontFamily: 'monospace',
+            }}
+          >
+            {apiKey || 'Not set'}
+          </Typography>
+        </Box>
+
+        <Flex gap={2} wrap="wrap">
+          <Button
+            variant="secondary"
+            size="S"
+            onClick={copyApiKey}
+            disabled={!apiKey}
+          >
+            Copy API Key
+          </Button>
+
+          <Button
+            variant="danger-light"
+            size="S"
+            onClick={rotateApiKey}
+            disabled={isRotating}
+          >
+            {isRotating ? 'Rotating...' : 'Rotate API Key'}
+          </Button>
+        </Flex>
+      </Flex>
+    </Box>
+  );
+};
+
 const BulkClearActions = () => {
   const [isClearing, setIsClearing] = useState(false);
   const { get, del } = useFetchClient();
@@ -637,6 +798,16 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'app-user-panel',
     Component: AppUserPanel,
+  });
+
+  app.injectContentManagerComponent('editView', 'right-links', {
+    name: 'tenant-color-panel',
+    Component: TenantColorPanel,
+  });
+
+  app.injectContentManagerComponent('editView', 'right-links', {
+    name: 'tenant-key-panel',
+    Component: TenantKeyPanel,
   });
 
   app.injectContentManagerComponent('listView', 'actions', {
