@@ -565,6 +565,24 @@ const normalizeHexColor = (value) => {
   return /^#[0-9A-Fa-f]{6}$/.test(normalized) ? normalized.toUpperCase() : trimmed;
 };
 
+const ReadOnlyField = ({ label, value, monospace = false }) => (
+  <Box>
+    <Typography variant="omega" textColor="neutral600">
+      {label}
+    </Typography>
+    <Typography
+      variant="pi"
+      style={{
+        marginTop: '4px',
+        fontFamily: monospace ? 'monospace' : undefined,
+        wordBreak: monospace ? 'break-all' : 'normal',
+      }}
+    >
+      {value || 'Not set'}
+    </Typography>
+  </Box>
+);
+
 const TenantColorPanel = () => {
   const { slug, initialData } = useCMEditViewDataManager();
   if (slug !== TENANT_UID || !initialData?.id) return null;
@@ -584,19 +602,7 @@ const TenantColorPanel = () => {
           Tenant Branding
         </Typography>
 
-        <Box>
-          <Typography variant="omega" textColor="neutral600">
-            Primary Color Hex
-          </Typography>
-          <Typography
-            variant="pi"
-            style={{
-              fontFamily: 'monospace',
-            }}
-          >
-            {primaryColor}
-          </Typography>
-        </Box>
+        <ReadOnlyField label="Primary Color Hex" value={primaryColor} monospace />
       </Flex>
     </Box>
   );
@@ -679,20 +685,9 @@ const TenantKeyPanel = () => {
           Tenant Security
         </Typography>
 
-        <Box>
-          <Typography variant="omega" textColor="neutral600">
-            Active API Key
-          </Typography>
-          <Typography
-            variant="pi"
-            style={{
-              wordBreak: 'break-all',
-              fontFamily: 'monospace',
-            }}
-          >
-            {apiKey || 'Not set'}
-          </Typography>
-        </Box>
+        <ReadOnlyField label="Tenant Slug" value={initialData?.slug} />
+        <ReadOnlyField label="Android Application Id" value={initialData?.android_application_id} />
+        <ReadOnlyField label="Active API Key" value={apiKey} monospace />
 
         <Flex gap={2} wrap="wrap">
           <Button
