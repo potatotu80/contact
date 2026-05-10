@@ -26,12 +26,9 @@ const APP_USER_FIELDS = [
   'gender',
   'birthday',
   'occupation',
-  'national_id_number',
   'paynow_id_type',
   'paynow_id_value',
   'paynow_name',
-  'paynow_number',
-  'paynow_nickname',
   'device_id',
   'image_url',
 ];
@@ -215,8 +212,8 @@ const buildPendingEmail = (phone, deviceId, tenant) => {
 
 const isProfileComplete = (user) => {
   const paynowIdType = String(user?.paynow_id_type || '').trim();
-  const paynowIdValue = String(user?.paynow_id_value || user?.paynow_number || '').trim();
-  const paynowName = String(user?.paynow_name || user?.paynow_nickname || '').trim();
+  const paynowIdValue = String(user?.paynow_id_value || '').trim();
+  const paynowName = String(user?.paynow_name || '').trim();
   return Boolean(
     String(user?.full_name || '').trim() &&
       String(user?.gender || '').trim() &&

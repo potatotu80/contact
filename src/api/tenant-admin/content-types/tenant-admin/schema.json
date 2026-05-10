@@ -12,11 +12,11 @@
   },
   "attributes": {
     "admin_user_id": {
-      "type": "integer",
-      "required": true
+      "type": "integer"
     },
     "admin_email": {
-      "type": "email"
+      "type": "email",
+      "required": true
     },
     "role": {
       "type": "enumeration",

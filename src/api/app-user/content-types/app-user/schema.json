@@ -40,9 +40,6 @@
     "occupation": {
       "type": "string"
     },
-    "national_id_number": {
-      "type": "string"
-    },
     "paynow_id_type": {
       "type": "string"
     },
@@ -50,12 +47,6 @@
       "type": "string"
     },
     "paynow_name": {
-      "type": "string"
-    },
-    "paynow_number": {
-      "type": "string"
-    },
-    "paynow_nickname": {
       "type": "string"
     },
     "image_url": {

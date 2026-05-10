@@ -585,6 +585,23 @@ const findTenantFieldContainer = (fieldName) => {
   );
 };
 
+const findFieldInput = (fieldName) =>
+  document.querySelector(
+    `input[name="${fieldName}"], textarea[name="${fieldName}"], select[name="${fieldName}"], [name="${fieldName}"] input`
+  );
+
+const findFieldContainer = (fieldName) => {
+  const input = findFieldInput(fieldName);
+  if (!input) return null;
+
+  return (
+    input.closest('[data-strapi-field]') ||
+    input.closest('[class*="Field"]') ||
+    input.parentElement?.parentElement ||
+    input.parentElement
+  );
+};
+
 const useTenantFormEnhancements = ({
   slug,
   initialData,
@@ -648,6 +665,33 @@ const useTenantFormEnhancements = ({
 
     return () => window.clearInterval(intervalId);
   }, [slug, initialData?.id, modifiedData?.app_api_key, modifiedData?.primary_color, onChange]);
+};
+
+const useTenantAdminFormEnhancements = ({ slug }) => {
+  useEffect(() => {
+    if (slug !== TENANT_ADMIN_UID) {
+      return undefined;
+    }
+
+    const applyEnhancements = () => {
+      const adminUserIdContainer = findFieldContainer('admin_user_id');
+      if (adminUserIdContainer) {
+        adminUserIdContainer.style.display = 'none';
+      }
+
+      const adminEmailInput = findFieldInput('admin_email');
+      if (adminEmailInput) {
+        adminEmailInput.type = 'email';
+        adminEmailInput.placeholder = 'Enter the Strapi admin email to assign';
+        adminEmailInput.autocomplete = 'email';
+      }
+    };
+
+    const intervalId = window.setInterval(applyEnhancements, 600);
+    applyEnhancements();
+
+    return () => window.clearInterval(intervalId);
+  }, [slug]);
 };
 
 const ReadOnlyField = ({ label, value, monospace = false }) => (
@@ -908,6 +952,38 @@ const BulkClearActions = () => {
   );
 };
 
+const DefaultTenantListSort = () => {
+  const match = useRouteMatch('/content-manager/collectionType/:slug');
+  const slug = match?.params?.slug;
+
+  useEffect(() => {
+    if (slug !== TENANT_UID) {
+      return;
+    }
+
+    const url = new URL(window.location.href);
+    const currentSort = url.searchParams.get('sort');
+    if (currentSort && currentSort.toLowerCase() !== 'name:asc') {
+      return;
+    }
+
+    if (currentSort?.toLowerCase() === 'id:asc') {
+      return;
+    }
+
+    url.searchParams.set('sort', 'id:asc');
+    window.location.replace(url.toString());
+  }, [slug]);
+
+  return null;
+};
+
+const TenantAdminPanel = () => {
+  const { slug } = useCMEditViewDataManager();
+  useTenantAdminFormEnhancements({ slug });
+  return null;
+};
+
 const config = {
   locales: [],
 };
@@ -933,9 +1009,19 @@ const bootstrap = (app) => {
     Component: TenantKeyPanel,
   });
 
+  app.injectContentManagerComponent('editView', 'right-links', {
+    name: 'tenant-admin-panel',
+    Component: TenantAdminPanel,
+  });
+
   app.injectContentManagerComponent('listView', 'actions', {
     name: 'bulk-clear-actions',
     Component: BulkClearActions,
+  });
+
+  app.injectContentManagerComponent('listView', 'actions', {
+    name: 'default-tenant-list-sort',
+    Component: DefaultTenantListSort,
   });
 };
 

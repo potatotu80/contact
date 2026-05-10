@@ -25,8 +25,8 @@ This workspace contains a Strapi v4 backend configured to use PostgreSQL.
   - `app_api_key` (`string`, required, unique)
   - branding fields for white-label Android builds
 - `Tenant Admin`
-  - `admin_user_id` (`integer`, Strapi admin user id)
-  - `admin_email` (`email`, auto-synced)
+  - `admin_email` (`email`, required, resolves the Strapi admin user automatically)
+  - `admin_user_id` (`integer`, auto-filled from the resolved admin user)
   - `tenant` (`many-to-one` relation to `Tenant`, required)
 
 ## REST API
@@ -271,7 +271,7 @@ After deploying this multi-tenant version:
 2. Give each tenant a unique `app_api_key`.
 3. Backfill existing `User` and `Contact` rows with the correct `tenant`.
 4. Create Strapi admin users for tenant operators as needed.
-5. Create `Tenant Admin` entries linking each admin user to the correct tenant.
+5. Create `Tenant Admin` entries by entering the Strapi admin email and linking it to the correct tenant.
 6. Set Android flavor secrets per tenant before building:
    - `APP_API_KEY_MEMBERREWARD`
    - add more tenant-specific keys as more flavors are introduced
