@@ -30,6 +30,8 @@ const buildVoiceIdentity = (adminUser) => {
   return `${prefix}-${adminUser.id}`;
 };
 
+const getAdminRequestUser = (ctx) => ctx.state?.user || ctx.state?.admin?.user || ctx.state?.adminUser || null;
+
 const getTwilioVoiceConfig = () => ({
   accountSid: (process.env.TWILIO_ACCOUNT_SID || '').trim(),
   apiKeySid: (process.env.TWILIO_VOICE_API_KEY_SID || '').trim(),
@@ -419,7 +421,7 @@ module.exports = {
    */
   register({ strapi }) {
     strapi.server.use(async (ctx, next) => {
-      const adminUser = ctx.state?.admin?.user;
+      const adminUser = getAdminRequestUser(ctx);
       if (!adminUser?.id) {
         return next();
       }
@@ -507,7 +509,7 @@ module.exports = {
           method: 'GET',
           path: '/twilio/voice/token',
           handler: async (ctx) => {
-            const adminUser = ctx.state?.admin?.user || ctx.state?.user || ctx.state?.adminUser;
+            const adminUser = getAdminRequestUser(ctx);
             if (!adminUser?.id) {
               return ctx.unauthorized('Admin authentication is required.');
             }
@@ -534,7 +536,7 @@ module.exports = {
               return ctx.badRequest('Tenant id must be a valid number.');
             }
 
-            const tenantContext = await getAdminTenantContext(strapi, ctx.state?.admin?.user);
+            const tenantContext = await getAdminTenantContext(strapi, getAdminRequestUser(ctx));
             if (!tenantContext.isAdmin) {
               return ctx.forbidden('Only authenticated admins can rotate tenant API keys.');
             }
@@ -603,7 +605,7 @@ module.exports = {
               return ctx.notFound('User not found.');
             }
 
-            const tenantContext = await getAdminTenantContext(strapi, ctx.state?.admin?.user);
+            const tenantContext = await getAdminTenantContext(strapi, getAdminRequestUser(ctx));
             if (!tenantContext.isSuperAdmin && tenantContext.tenantIds.length > 0) {
               if (!tenantContext.tenantIds.includes(user.tenant?.id)) {
                 return ctx.forbidden('This user is outside your tenant.');
