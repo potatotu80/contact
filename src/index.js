@@ -535,8 +535,12 @@ module.exports = {
             }
 
             const tenantContext = await getAdminTenantContext(strapi, ctx.state?.admin?.user);
-            if (!tenantContext.isSuperAdmin) {
-              return ctx.forbidden('Only super admins can rotate tenant API keys.');
+            if (!tenantContext.isAdmin) {
+              return ctx.forbidden('Only authenticated admins can rotate tenant API keys.');
+            }
+
+            if (!tenantContext.isSuperAdmin && !tenantContext.tenantIds.includes(tenantId)) {
+              return ctx.forbidden('You can only rotate API keys for tenants you manage.');
             }
 
             const tenant = await strapi.entityService.findOne(APP_TENANT_UID, tenantId, {
