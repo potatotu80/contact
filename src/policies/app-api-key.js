@@ -11,6 +11,19 @@ const getClientIp = (ctx) => {
   return ctx.request.ip || ctx.ip || 'unknown';
 };
 
+const maskKey = (value) => {
+  const key = String(value || '').trim();
+  if (!key) {
+    return '(empty)';
+  }
+
+  if (key.length <= 10) {
+    return `${key.slice(0, 2)}...${key.slice(-2)}`;
+  }
+
+  return `${key.slice(0, 8)}...${key.slice(-6)}`;
+};
+
 const rejectForbidden = (ctx, message) => {
   ctx.status = 403;
   ctx.body = {
@@ -55,12 +68,18 @@ module.exports = async (policyContext, _config, { strapi }) => {
 
   const tenant = await findTenantByApiKey(strapi, presentedKey);
   if (tenant) {
+    strapi.log.info(
+      `[app-api-key] Accepted ${policyContext.request.method} ${policyContext.request.path} ` +
+      `tenant=${tenant.slug || tenant.id} key=${maskKey(presentedKey)} ` +
+      `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
+    );
     policyContext.state.appTenant = tenant;
     return true;
   }
 
   strapi.log.warn(
     `[app-api-key] Blocked ${policyContext.request.method} ${policyContext.request.path} ` +
+    `key=${maskKey(presentedKey)} ` +
     `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
   );
 
