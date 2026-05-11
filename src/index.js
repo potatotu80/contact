@@ -348,7 +348,9 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
 };
 
 const attachTenantAdminPermissionExpansion = (strapi) => {
-  const controller = strapi.admin?.controllers?.authenticatedUser;
+  const controller =
+    strapi.admin?.controllers?.['authenticated-user'] ||
+    strapi.admin?.controllers?.authenticatedUser;
   if (!controller || controller.__tenantPermissionWrapped) {
     return;
   }
