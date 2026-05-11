@@ -199,6 +199,11 @@ const AppUserPanel = () => {
         if (!isMounted) return;
 
         setGalleryItems([]);
+        const status = error?.response?.status || error?.status;
+        if (status === 403 || status === 404) {
+          return;
+        }
+
         toggleNotification({
           type: 'warning',
           message: error?.message || 'Failed to load signed gallery images.',

@@ -606,23 +606,27 @@ module.exports = {
               return ctx.internalServerError('S3 configuration missing: S3_BUCKET_NAME or AWS_REGION.');
             }
 
-            const user = await strapi.entityService.findOne(APP_USER_UID, userId, {
-              fields: ['id'],
-              populate: {
-                tenant: {
-                  fields: ['id', 'slug', 'name'],
+            const tenantContext = await getAdminTenantContext(strapi, getAdminRequestUser(ctx));
+            let user;
+
+            if (tenantContext.isSuperAdmin) {
+              user = await strapi.entityService.findOne(APP_USER_UID, userId, {
+                fields: ['id'],
+                populate: {
+                  tenant: {
+                    fields: ['id', 'slug', 'name'],
+                  },
                 },
-              },
-            });
-            if (!user) {
-              return ctx.notFound('User not found.');
+              });
+            } else {
+              const allowedUsers = await Promise.all(
+                tenantContext.tenantIds.map((tenantId) => assertTenantScopeForUser(strapi, tenantId, userId))
+              );
+              user = allowedUsers.find(Boolean) || null;
             }
 
-            const tenantContext = await getAdminTenantContext(strapi, getAdminRequestUser(ctx));
-            if (!tenantContext.isSuperAdmin && tenantContext.tenantIds.length > 0) {
-              if (!tenantContext.tenantIds.includes(user.tenant?.id)) {
-                return ctx.forbidden('This user is outside your tenant.');
-              }
+            if (!user) {
+              return ctx.forbidden('This user is outside your tenant.');
             }
 
             const s3Client = new AWS.S3({
