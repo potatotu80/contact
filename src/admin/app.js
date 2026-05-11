@@ -55,6 +55,17 @@ const normalizePhone = (value) => {
   return compact.startsWith('00') ? `+${compact.slice(2)}` : compact;
 };
 
+const extractTenantRecord = (value) => {
+  if (!value) return null;
+  if (Array.isArray(value)) {
+    return value[0] || null;
+  }
+  if (Array.isArray(value?.connect)) {
+    return value.connect[0] || null;
+  }
+  return value;
+};
+
 const formatCallDuration = (seconds) => {
   const safeSeconds = Math.max(0, Number(seconds) || 0);
   const hours = Math.floor(safeSeconds / 3600);
@@ -159,7 +170,7 @@ const fetchAllEntryIds = async (get, slug) => {
 };
 
 const AppUserPanel = () => {
-  const { slug, initialData } = useCMEditViewDataManager();
+  const { slug, initialData, modifiedData } = useCMEditViewDataManager();
   const { get } = useFetchClient();
   const toggleNotification = useNotification();
   const [galleryItems, setGalleryItems] = useState([]);
@@ -176,7 +187,8 @@ const AppUserPanel = () => {
     () => formatDateTime(initialData?.updatedAt),
     [initialData?.updatedAt]
   );
-  const tenantSlug = initialData?.tenant?.slug;
+  const tenantRecord = extractTenantRecord(modifiedData?.tenant) || extractTenantRecord(initialData?.tenant);
+  const tenantSlug = tenantRecord?.slug;
   const userImagesUrl = useMemo(() => buildS3ConsoleFolderUrl(tenantSlug, userId), [tenantSlug, userId]);
 
   useEffect(() => {
@@ -259,7 +271,7 @@ const AppUserPanel = () => {
           <Typography variant="omega" textColor="neutral600">
             Tenant
           </Typography>
-          <Typography variant="pi">{initialData?.tenant?.name || 'Not assigned'}</Typography>
+          <Typography variant="pi">{tenantRecord?.name || tenantRecord?.slug || 'Not assigned'}</Typography>
         </Box>
 
         <Box>

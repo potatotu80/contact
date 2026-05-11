@@ -381,6 +381,69 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
   controller.__tenantScopedWrapped = true;
 };
 
+const attachTenantScopedRelationControllers = (strapi) => {
+  const controller = strapi.plugin('content-manager')?.controller('relations');
+  if (!controller || controller.__tenantScopedWrapped) {
+    return;
+  }
+
+  const originalFindExisting = controller.findExisting.bind(controller);
+
+  controller.findExisting = async (ctx) => {
+    const { model, id, targetField } = ctx.params;
+    const supportedModel = model === APP_USER_UID || model === CONTACT_UID;
+
+    if (!supportedModel || targetField !== 'tenant') {
+      return originalFindExisting(ctx);
+    }
+
+    const adminUser = await getAdminRequestUser(ctx, strapi);
+    if (!adminUser?.id) {
+      return originalFindExisting(ctx);
+    }
+
+    const tenantContext = await getAdminTenantContext(strapi, adminUser);
+    if (tenantContext.isSuperAdmin) {
+      return originalFindExisting(ctx);
+    }
+
+    if (!tenantContext.tenantIds.length) {
+      return ctx.forbidden('This admin user is not assigned to a tenant.');
+    }
+
+    const entityId = parsePositiveInt(id);
+    if (!entityId) {
+      return ctx.badRequest('Entry id must be a valid number.');
+    }
+
+    const allowed = await Promise.all(
+      tenantContext.tenantIds.map((tenantId) =>
+        model === APP_USER_UID
+          ? assertTenantScopeForUser(strapi, tenantId, entityId)
+          : assertTenantScopeForContact(strapi, tenantId, entityId)
+      )
+    );
+
+    const entity = allowed.find(Boolean);
+    if (!entity) {
+      return ctx.forbidden('This record is outside your tenants.');
+    }
+
+    const tenant = entity.tenant || null;
+    ctx.body = {
+      data: tenant
+        ? {
+            id: tenant.id,
+            name: tenant.name || tenant.slug || String(tenant.id),
+            slug: tenant.slug || null,
+          }
+        : null,
+    };
+  };
+
+  controller.__tenantScopedWrapped = true;
+};
+
 const attachTenantAdminPermissionExpansion = (strapi) => {
   const controller =
     strapi.admin?.controllers?.['authenticated-user'] ||
@@ -690,6 +753,7 @@ module.exports = {
    */
   register({ strapi }) {
     attachTenantScopedContentManagerControllers(strapi);
+    attachTenantScopedRelationControllers(strapi);
     attachTenantAdminPermissionExpansion(strapi);
 
     strapi.server.use(async (ctx, next) => {
