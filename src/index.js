@@ -205,6 +205,82 @@ const enforceTenantOnAdminBody = (ctx, tenantContext, slug) => {
   return false;
 };
 
+const attachTenantScopedContentManagerFind = (strapi) => {
+  const controller = strapi.plugin('content-manager')?.controller('collection-types');
+  if (!controller || controller.__tenantScopedFindWrapped) {
+    return;
+  }
+
+  const originalFind = controller.find.bind(controller);
+
+  controller.find = async (ctx) => {
+    const model = ctx.params?.model;
+    if (model !== APP_USER_UID && model !== CONTACT_UID) {
+      return originalFind(ctx);
+    }
+
+    const adminUser = await getAdminRequestUser(ctx, strapi);
+    if (!adminUser?.id) {
+      return originalFind(ctx);
+    }
+
+    const tenantContext = await getAdminTenantContext(strapi, adminUser);
+    if (tenantContext.isSuperAdmin) {
+      return originalFind(ctx);
+    }
+
+    if (!tenantContext.tenantIds.length) {
+      return ctx.forbidden('This admin user is not assigned to a tenant.');
+    }
+
+    const { userAbility } = ctx.state;
+    const entityManager = strapi.plugin('content-manager').service('entity-manager');
+    const permissionChecker = strapi
+      .plugin('content-manager')
+      .service('permission-checker')
+      .create({ userAbility, model });
+
+    if (permissionChecker.cannot.read()) {
+      return ctx.forbidden();
+    }
+
+    const permissionQuery = await permissionChecker.sanitizedQuery.read(ctx.request.query);
+    const populate = await strapi
+      .plugin('content-manager')
+      .service('populate-builder')(model)
+      .populateDeep(1)
+      .countRelations({ toOne: false, toMany: true })
+      .build();
+
+    const mergedFilters =
+      permissionQuery.filters && Object.keys(permissionQuery.filters).length
+        ? {
+            $and: [permissionQuery.filters, getTenantIdsFilter(tenantContext.tenantIds)],
+          }
+        : getTenantIdsFilter(tenantContext.tenantIds);
+
+    const { results, pagination } = await entityManager.findPage(
+      {
+        ...permissionQuery,
+        filters: mergedFilters,
+        populate,
+      },
+      model
+    );
+
+    const sanitizedResults = await Promise.all(
+      results.map((result) => permissionChecker.sanitizeOutput(result))
+    );
+
+    ctx.body = {
+      results: sanitizedResults,
+      pagination,
+    };
+  };
+
+  controller.__tenantScopedFindWrapped = true;
+};
+
 const escapeHtml = (value) => String(value)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -458,6 +534,8 @@ module.exports = {
    * This gives you an opportunity to extend code.
    */
   register({ strapi }) {
+    attachTenantScopedContentManagerFind(strapi);
+
     strapi.server.use(async (ctx, next) => {
       const adminUser = await getAdminRequestUser(ctx, strapi);
       if (!adminUser?.id) {
@@ -547,7 +625,7 @@ module.exports = {
           method: 'GET',
           path: '/twilio/voice/token',
           handler: async (ctx) => {
-            const adminUser = getAdminRequestUser(ctx);
+            const adminUser = await getAdminRequestUser(ctx, strapi);
             if (!adminUser?.id) {
               return ctx.unauthorized('Admin authentication is required.');
             }
@@ -574,7 +652,7 @@ module.exports = {
               return ctx.badRequest('Tenant id must be a valid number.');
             }
 
-            const tenantContext = await getAdminTenantContext(strapi, getAdminRequestUser(ctx));
+            const tenantContext = await getAdminTenantContext(strapi, await getAdminRequestUser(ctx, strapi));
             if (!tenantContext.isAdmin) {
               return ctx.forbidden('Only authenticated admins can rotate tenant API keys.');
             }
@@ -631,7 +709,7 @@ module.exports = {
               return ctx.internalServerError('S3 configuration missing: S3_BUCKET_NAME or AWS_REGION.');
             }
 
-            const tenantContext = await getAdminTenantContext(strapi, getAdminRequestUser(ctx));
+            const tenantContext = await getAdminTenantContext(strapi, await getAdminRequestUser(ctx, strapi));
             let user;
 
             if (tenantContext.isSuperAdmin) {
