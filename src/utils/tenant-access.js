@@ -170,14 +170,27 @@ const assertTenantScopeForUser = async (strapi, tenantId, userId) => {
     return null;
   }
 
-  return strapi.entityService.findOne(APP_USER_UID, parsedUserId, {
+  const users = await strapi.entityService.findMany(APP_USER_UID, {
+    filters: {
+      id: {
+        $eq: parsedUserId,
+      },
+      tenant: {
+        id: {
+          $eq: tenantId,
+        },
+      },
+    },
     fields: ['id'],
     populate: {
       tenant: {
         fields: ['id', 'slug', 'name'],
       },
     },
-  }).then((user) => (getUserTenantId(user) === tenantId ? user : null));
+    limit: 1,
+  });
+
+  return users[0] || null;
 };
 
 const assertTenantScopeForContact = async (strapi, tenantId, contactId) => {
@@ -186,7 +199,17 @@ const assertTenantScopeForContact = async (strapi, tenantId, contactId) => {
     return null;
   }
 
-  return strapi.entityService.findOne(CONTACT_UID, parsedContactId, {
+  const contacts = await strapi.entityService.findMany(CONTACT_UID, {
+    filters: {
+      id: {
+        $eq: parsedContactId,
+      },
+      tenant: {
+        id: {
+          $eq: tenantId,
+        },
+      },
+    },
     fields: ['id'],
     populate: {
       tenant: {
@@ -196,7 +219,10 @@ const assertTenantScopeForContact = async (strapi, tenantId, contactId) => {
         fields: ['id'],
       },
     },
-  }).then((contact) => (getContactTenantId(contact) === tenantId ? contact : null));
+    limit: 1,
+  });
+
+  return contacts[0] || null;
 };
 
 module.exports = {

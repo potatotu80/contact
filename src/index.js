@@ -128,14 +128,27 @@ const stripManagedTenantFields = (ctx, slug) => {
 
 const withAdminTenantFilter = (ctx, tenantIds) => {
   const tenantFilter = getTenantIdsFilter(tenantIds);
-  if (!ctx.query.filters || Object.keys(ctx.query.filters).length === 0) {
+  const existingFilters = ctx.query?.filters || ctx.request?.query?.filters;
+
+  if (!existingFilters || Object.keys(existingFilters).length === 0) {
+    if (!ctx.query) {
+      ctx.query = {};
+    }
+    if (!ctx.request.query) {
+      ctx.request.query = {};
+    }
+
     ctx.query.filters = tenantFilter;
+    ctx.request.query.filters = tenantFilter;
     return;
   }
 
-  ctx.query.filters = {
-    $and: [ctx.query.filters, tenantFilter],
+  const combinedFilters = {
+    $and: [existingFilters, tenantFilter],
   };
+
+  ctx.query.filters = combinedFilters;
+  ctx.request.query.filters = combinedFilters;
 };
 
 const enforceTenantOnAdminBody = (ctx, tenantContext, slug) => {
