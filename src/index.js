@@ -213,6 +213,33 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
 
   const originalFind = controller.find.bind(controller);
   const originalFindOne = controller.findOne.bind(controller);
+  const getForcedTenantPopulate = (model) => {
+    if (model === APP_USER_UID) {
+      return {
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      };
+    }
+
+    if (model === CONTACT_UID) {
+      return {
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+        user: {
+          fields: ['id', 'email', 'device_id'],
+          populate: {
+            tenant: {
+              fields: ['id', 'name', 'slug'],
+            },
+          },
+        },
+      };
+    }
+
+    return {};
+  };
 
   controller.find = async (ctx) => {
     const model = ctx.params?.model;
@@ -336,7 +363,14 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       .countRelations()
       .build();
 
-    const entity = await entityManager.findOne(entityId, model, { populate });
+    const forcedPopulate = getForcedTenantPopulate(model);
+
+    const entity = await entityManager.findOne(entityId, model, {
+      populate: {
+        ...populate,
+        ...forcedPopulate,
+      },
+    });
     if (!entity) {
       return ctx.notFound();
     }
