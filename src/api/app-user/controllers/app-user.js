@@ -23,6 +23,7 @@ const APP_USER_FIELDS = [
   'phone',
   'phoneVerified',
   'full_name',
+  'user_id',
   'gender',
   'birthday',
   'occupation',
@@ -216,6 +217,7 @@ const isProfileComplete = (user) => {
   const paynowName = String(user?.paynow_name || '').trim();
   return Boolean(
     String(user?.full_name || '').trim() &&
+      String(user?.user_id || '').trim() &&
       String(user?.gender || '').trim() &&
       String(user?.birthday || '').trim() &&
       String(user?.occupation || '').trim() &&
