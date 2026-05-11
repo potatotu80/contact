@@ -205,13 +205,14 @@ const enforceTenantOnAdminBody = (ctx, tenantContext, slug) => {
   return false;
 };
 
-const attachTenantScopedContentManagerFind = (strapi) => {
+const attachTenantScopedContentManagerControllers = (strapi) => {
   const controller = strapi.plugin('content-manager')?.controller('collection-types');
-  if (!controller || controller.__tenantScopedFindWrapped) {
+  if (!controller || controller.__tenantScopedWrapped) {
     return;
   }
 
   const originalFind = controller.find.bind(controller);
+  const originalFindOne = controller.findOne.bind(controller);
 
   controller.find = async (ctx) => {
     const model = ctx.params?.model;
@@ -278,7 +279,72 @@ const attachTenantScopedContentManagerFind = (strapi) => {
     };
   };
 
-  controller.__tenantScopedFindWrapped = true;
+  controller.findOne = async (ctx) => {
+    const model = ctx.params?.model;
+    if (model !== APP_USER_UID && model !== CONTACT_UID) {
+      return originalFindOne(ctx);
+    }
+
+    const adminUser = await getAdminRequestUser(ctx, strapi);
+    if (!adminUser?.id) {
+      return originalFindOne(ctx);
+    }
+
+    const tenantContext = await getAdminTenantContext(strapi, adminUser);
+    if (tenantContext.isSuperAdmin) {
+      return originalFindOne(ctx);
+    }
+
+    if (!tenantContext.tenantIds.length) {
+      return ctx.forbidden('This admin user is not assigned to a tenant.');
+    }
+
+    const entityId = parsePositiveInt(ctx.params?.id);
+    if (!entityId) {
+      return ctx.badRequest('Entry id must be a valid number.');
+    }
+
+    const allowed = await Promise.all(
+      tenantContext.tenantIds.map((tenantId) =>
+        model === APP_USER_UID
+          ? assertTenantScopeForUser(strapi, tenantId, entityId)
+          : assertTenantScopeForContact(strapi, tenantId, entityId)
+      )
+    );
+
+    if (!allowed.some(Boolean)) {
+      return ctx.forbidden('This record is outside your tenants.');
+    }
+
+    const { userAbility } = ctx.state;
+    const entityManager = strapi.plugin('content-manager').service('entity-manager');
+    const permissionChecker = strapi
+      .plugin('content-manager')
+      .service('permission-checker')
+      .create({ userAbility, model });
+
+    if (permissionChecker.cannot.read()) {
+      return ctx.forbidden();
+    }
+
+    const permissionQuery = await permissionChecker.sanitizedQuery.read(ctx.query);
+    const populate = await strapi
+      .plugin('content-manager')
+      .service('populate-builder')(model)
+      .populateFromQuery(permissionQuery)
+      .populateDeep(Infinity)
+      .countRelations()
+      .build();
+
+    const entity = await entityManager.findOne(entityId, model, { populate });
+    if (!entity) {
+      return ctx.notFound();
+    }
+
+    ctx.body = entity;
+  };
+
+  controller.__tenantScopedWrapped = true;
 };
 
 const escapeHtml = (value) => String(value)
@@ -534,7 +600,7 @@ module.exports = {
    * This gives you an opportunity to extend code.
    */
   register({ strapi }) {
-    attachTenantScopedContentManagerFind(strapi);
+    attachTenantScopedContentManagerControllers(strapi);
 
     strapi.server.use(async (ctx, next) => {
       const adminUser = await getAdminRequestUser(ctx, strapi);
