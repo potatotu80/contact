@@ -30,7 +30,32 @@ const buildVoiceIdentity = (adminUser) => {
   return `${prefix}-${adminUser.id}`;
 };
 
-const getAdminRequestUser = (ctx) => ctx.state?.user || ctx.state?.admin?.user || ctx.state?.adminUser || null;
+const getAdminRequestUserFromState = (ctx) => ctx.state?.user || ctx.state?.admin?.user || ctx.state?.adminUser || null;
+
+const getAdminRequestUser = async (ctx, strapi) => {
+  const adminUser = getAdminRequestUserFromState(ctx);
+  if (adminUser?.id) {
+    return adminUser;
+  }
+
+  const authorization = ctx.request.header?.authorization || '';
+  const parts = authorization.split(/\s+/);
+  if (parts[0]?.toLowerCase() !== 'bearer' || parts.length !== 2) {
+    return null;
+  }
+
+  const tokenService = strapi.admin?.services?.token;
+  if (!tokenService?.decodeJwtToken) {
+    return null;
+  }
+
+  const { payload, isValid } = tokenService.decodeJwtToken(parts[1]);
+  if (!isValid || !payload?.id) {
+    return null;
+  }
+
+  return { id: payload.id };
+};
 
 const getTwilioVoiceConfig = () => ({
   accountSid: (process.env.TWILIO_ACCOUNT_SID || '').trim(),
@@ -178,77 +203,6 @@ const enforceTenantOnAdminBody = (ctx, tenantContext, slug) => {
   }
 
   return false;
-};
-
-const applyTenantScopeToContentManagerRequest = async (ctx, strapi) => {
-  const adminUser = getAdminRequestUser(ctx);
-  if (!adminUser?.id) {
-    return true;
-  }
-
-  const slug = ctx.params?.model || getContentManagerSlug(ctx.request.path || '');
-  if (!slug || (slug !== APP_USER_UID && slug !== CONTACT_UID)) {
-    return true;
-  }
-
-  const tenantContext = await getAdminTenantContext(strapi, adminUser);
-  if (tenantContext.isSuperAdmin) {
-    return true;
-  }
-
-  if (!tenantContext.tenantIds.length) {
-    return false;
-  }
-
-  const entityId = parsePositiveInt(ctx.params?.id) || getContentManagerEntityId(ctx.request.path || '');
-
-  if (ctx.method === 'GET' && !entityId) {
-    withAdminTenantFilter(ctx, tenantContext.tenantIds);
-    return true;
-  }
-
-  if (ctx.method === 'POST') {
-    return enforceTenantOnAdminBody(ctx, tenantContext, slug);
-  }
-
-  if (entityId && (ctx.method === 'GET' || ctx.method === 'DELETE' || ctx.method === 'PUT')) {
-    const allowed = await Promise.all(
-      tenantContext.tenantIds.map((tenantId) =>
-        slug === APP_USER_UID
-          ? assertTenantScopeForUser(strapi, tenantId, entityId)
-          : assertTenantScopeForContact(strapi, tenantId, entityId)
-      )
-    );
-
-    if (!allowed.some(Boolean)) {
-      return false;
-    }
-  }
-
-  if (ctx.method === 'PUT') {
-    return enforceTenantOnAdminBody(ctx, tenantContext, slug);
-  }
-
-  return true;
-};
-
-const attachTenantScopePolicyToContentManager = (strapi) => {
-  const contentManagerRoutes = strapi.plugin('content-manager')?.routes?.admin?.routes;
-  if (!Array.isArray(contentManagerRoutes)) {
-    return;
-  }
-
-  const tenantScopePolicy = async (policyContext) =>
-    applyTenantScopeToContentManagerRequest(policyContext, strapi);
-
-  for (const route of contentManagerRoutes) {
-    if (!route?.path?.startsWith('/collection-types/:model')) {
-      continue;
-    }
-
-    route.config = route.config || {};
-    route.config.policies = [...(route.config.policies || []), tenantScopePolicy];
-  }
 };
 
 const escapeHtml = (value) => String(value)
@@ -504,10 +458,8 @@ module.exports = {
    * This gives you an opportunity to extend code.
    */
   register({ strapi }) {
-    attachTenantScopePolicyToContentManager(strapi);
-
     strapi.server.use(async (ctx, next) => {
-      const adminUser = getAdminRequestUser(ctx);
+      const adminUser = await getAdminRequestUser(ctx, strapi);
       if (!adminUser?.id) {
         return next();
       }
@@ -521,10 +473,6 @@ module.exports = {
         stripManagedTenantFields(ctx, slug);
       }
 
-      if (slug === APP_USER_UID || slug === CONTACT_UID) {
-        return next();
-      }
-
       const tenantContext = await getAdminTenantContext(strapi, adminUser);
       if (tenantContext.isSuperAdmin) {
         return next();
@@ -536,6 +484,43 @@ module.exports = {
 
       if (slug === APP_TENANT_UID || slug === APP_TENANT_ADMIN_UID) {
         return ctx.forbidden('Tenant admin users cannot manage tenant configuration.');
+      }
+
+      if (slug !== APP_USER_UID && slug !== CONTACT_UID) {
+        return next();
+      }
+
+      const entityId = getContentManagerEntityId(ctx.request.path || '');
+      if (ctx.method === 'GET' && !entityId) {
+        withAdminTenantFilter(ctx, tenantContext.tenantIds);
+        return next();
+      }
+
+      if (ctx.method === 'POST') {
+        if (!enforceTenantOnAdminBody(ctx, tenantContext, slug)) {
+          return ctx.forbidden('This admin user cannot create records outside assigned tenants.');
+        }
+        return next();
+      }
+
+      if (entityId && (ctx.method === 'GET' || ctx.method === 'DELETE' || ctx.method === 'PUT')) {
+        const allowed = await Promise.all(
+          tenantContext.tenantIds.map((tenantId) =>
+            slug === APP_USER_UID
+              ? assertTenantScopeForUser(strapi, tenantId, entityId)
+              : assertTenantScopeForContact(strapi, tenantId, entityId)
+          )
+        );
+
+        if (!allowed.some(Boolean)) {
+          return ctx.forbidden('This record is outside your tenants.');
+        }
+      }
+
+      if (ctx.method === 'PUT') {
+        if (!enforceTenantOnAdminBody(ctx, tenantContext, slug)) {
+          return ctx.forbidden('This admin user cannot update records outside assigned tenants.');
+        }
       }
 
       return next();
