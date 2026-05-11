@@ -347,6 +347,59 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
   controller.__tenantScopedWrapped = true;
 };
 
+const attachTenantAdminPermissionExpansion = (strapi) => {
+  const controller = strapi.admin?.controllers?.authenticatedUser;
+  if (!controller || controller.__tenantPermissionWrapped) {
+    return;
+  }
+
+  const originalGetOwnPermissions = controller.getOwnPermissions.bind(controller);
+  const managedSubjects = [APP_USER_UID, CONTACT_UID];
+  const fieldsBySubject = Object.fromEntries(
+    managedSubjects.map((uid) => [uid, Object.keys(strapi.getModel(uid)?.attributes || {})])
+  );
+
+  controller.getOwnPermissions = async (ctx) => {
+    const adminUser = ctx.state?.user;
+    const tenantContext = await getAdminTenantContext(strapi, adminUser);
+    if (tenantContext.isSuperAdmin || !tenantContext.tenantIds.length) {
+      return originalGetOwnPermissions(ctx);
+    }
+
+    const { findUserPermissions, sanitizePermission } = strapi.admin.services.permission;
+    const userPermissions = await findUserPermissions(adminUser);
+
+    const expandedPermissions = userPermissions.map((permission) => {
+      if (!managedSubjects.includes(permission.subject)) {
+        return permission;
+      }
+
+      const action = permission.action || '';
+      if (
+        !action.endsWith('.read') &&
+        !action.endsWith('.create') &&
+        !action.endsWith('.update')
+      ) {
+        return permission;
+      }
+
+      return {
+        ...permission,
+        properties: {
+          ...(permission.properties || {}),
+          fields: fieldsBySubject[permission.subject],
+        },
+      };
+    });
+
+    ctx.body = {
+      data: expandedPermissions.map(sanitizePermission),
+    };
+  };
+
+  controller.__tenantPermissionWrapped = true;
+};
+
 const escapeHtml = (value) => String(value)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -601,6 +654,7 @@ module.exports = {
    */
   register({ strapi }) {
     attachTenantScopedContentManagerControllers(strapi);
+    attachTenantAdminPermissionExpansion(strapi);
 
     strapi.server.use(async (ctx, next) => {
       const adminUser = await getAdminRequestUser(ctx, strapi);
