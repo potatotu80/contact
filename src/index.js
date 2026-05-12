@@ -737,18 +737,16 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl }) =>
         });
 
         window.addEventListener("pagehide", markAppOpened);
-        window.addEventListener("blur", function () {
-          window.setTimeout(function () {
-            if (document.hidden) {
-              markAppOpened();
-            }
-          }, 150);
-        });
 
         window.setTimeout(function () {
-          if (!appOpened && installUrl && installBox) {
+          if (!appOpened && installBox) {
             installBox.style.display = "block";
-            status.textContent = "App not detected. Install the latest Android APK below.";
+            status.textContent = installUrl
+              ? "App not detected. Install the latest Android APK below."
+              : "App not detected, and this tenant is missing an APK download URL.";
+            if (!installUrl && installButton) {
+              installButton.style.display = "none";
+            }
           }
         }, fallbackDelayMs);
 
