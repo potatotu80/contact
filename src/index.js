@@ -1195,6 +1195,7 @@ module.exports = {
 
           const tenant = tenants[0];
           if (!tenant) {
+            strapi.log.warn(`[qr-install] Missing tenant for tenantCode="${tenantCode}" referralCode="${referralCode}"`);
             ctx.type = 'text/html; charset=utf-8';
             ctx.status = 404;
             ctx.body = renderQrLandingHtml({
@@ -1210,6 +1211,12 @@ module.exports = {
             });
             return;
           }
+
+          strapi.log.info(
+            `[qr-install] tenant="${tenant.slug}" deepLinkScheme="${tenant.android_deep_link_scheme || ''}" apkUrlPresent=${Boolean(
+              ensureAbsoluteUrl(tenant.android_apk_url)
+            )} qrCodeUrl="${tenant.qr_code_url || ''}" referralCode="${referralCode}"`
+          );
 
           ctx.type = 'text/html; charset=utf-8';
           ctx.body = renderQrLandingHtml({
