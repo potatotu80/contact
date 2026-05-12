@@ -46,6 +46,15 @@
     "android_application_id": {
       "type": "string"
     },
+    "android_deep_link_scheme": {
+      "type": "string"
+    },
+    "android_apk_url": {
+      "type": "string"
+    },
+    "qr_code_url": {
+      "type": "string"
+    },
     "brand_logo": {
       "type": "media",
       "multiple": false,

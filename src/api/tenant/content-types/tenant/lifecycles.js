@@ -4,6 +4,20 @@ const { generateTenantApiKey, isGeneratedTenantApiKey } = require('../../../../u
 
 const MANAGED_API_KEY_PLACEHOLDER = 'Auto-generated on save';
 
+const deriveDeepLinkScheme = (value) => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9+.-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  if (!normalized) {
+    return '';
+  }
+
+  return /^[a-z]/.test(normalized) ? normalized : '';
+};
+
 const shouldReplaceTenantApiKey = (value) => {
   const normalized = String(value || '').trim();
   if (!normalized) {
@@ -26,6 +40,13 @@ const ensureTenantApiKeyOnCreate = (event) => {
   if (shouldReplaceTenantApiKey(data.app_api_key)) {
     data.app_api_key = generateTenantApiKey(data);
   }
+
+  if (!String(data.android_deep_link_scheme || '').trim()) {
+    data.android_deep_link_scheme =
+      deriveDeepLinkScheme(data.slug) ||
+      deriveDeepLinkScheme(data.name) ||
+      'memberreward';
+  }
 };
 
 const ensureTenantApiKeyOnUpdate = (event) => {
@@ -40,6 +61,12 @@ const ensureTenantApiKeyOnUpdate = (event) => {
 
   if (shouldReplaceTenantApiKey(data.app_api_key)) {
     data.app_api_key = generateTenantApiKey(data);
+  }
+
+  if (!String(data.android_deep_link_scheme || '').trim()) {
+    data.android_deep_link_scheme =
+      deriveDeepLinkScheme(data.slug) ||
+      deriveDeepLinkScheme(data.name);
   }
 };
 

@@ -810,6 +810,12 @@ const TenantKeyPanel = () => {
     );
   }
 
+  const qrCodeUrl = String(modifiedData?.qr_code_url || initialData?.qr_code_url || '').trim();
+  const apkUrl = String(modifiedData?.android_apk_url || initialData?.android_apk_url || '').trim();
+  const deepLinkScheme = String(
+    modifiedData?.android_deep_link_scheme || initialData?.android_deep_link_scheme || ''
+  ).trim();
+
   const copyApiKey = async () => {
     if (!apiKey) {
       toggleNotification({
@@ -829,6 +835,29 @@ const TenantKeyPanel = () => {
       toggleNotification({
         type: 'warning',
         message: 'Unable to copy the tenant API key.',
+      });
+    }
+  };
+
+  const copyQrCodeUrl = async () => {
+    if (!qrCodeUrl) {
+      toggleNotification({
+        type: 'warning',
+        message: 'No QR code URL is configured for this tenant.',
+      });
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(qrCodeUrl);
+      toggleNotification({
+        type: 'success',
+        message: 'QR code URL copied.',
+      });
+    } catch (error) {
+      toggleNotification({
+        type: 'warning',
+        message: 'Unable to copy the QR code URL.',
       });
     }
   };
@@ -876,9 +905,21 @@ const TenantKeyPanel = () => {
 
         <ReadOnlyField label="Tenant Slug" value={initialData?.slug} />
         <ReadOnlyField label="Android Application Id" value={initialData?.android_application_id} />
+        <ReadOnlyField label="Deep Link Scheme" value={deepLinkScheme} monospace />
+        <ReadOnlyField label="QR Code URL" value={qrCodeUrl} monospace />
+        <ReadOnlyField label="Android APK URL" value={apkUrl} monospace />
         <ReadOnlyField label="Active API Key" value={apiKey} monospace />
 
         <Flex gap={2} wrap="wrap">
+          <Button
+            variant="secondary"
+            size="S"
+            onClick={copyQrCodeUrl}
+            disabled={!qrCodeUrl}
+          >
+            Copy QR URL
+          </Button>
+
           <Button
             variant="secondary"
             size="S"

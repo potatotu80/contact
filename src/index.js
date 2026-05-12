@@ -243,7 +243,7 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
 
   controller.find = async (ctx) => {
     const model = ctx.params?.model;
-    if (model !== APP_USER_UID && model !== CONTACT_UID) {
+    if (model !== APP_USER_UID && model !== CONTACT_UID && model !== APP_TENANT_UID) {
       return originalFind(ctx);
     }
 
@@ -259,6 +259,46 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
 
     if (!tenantContext.tenantIds.length) {
       return ctx.forbidden('This admin user is not assigned to a tenant.');
+    }
+
+    if (model === APP_TENANT_UID) {
+      const mergedFilters =
+        ctx.request.query?.filters && Object.keys(ctx.request.query.filters).length
+          ? {
+              $and: [ctx.request.query.filters, { id: { $in: tenantContext.tenantIds } }],
+            }
+          : { id: { $in: tenantContext.tenantIds } };
+
+      const page = Math.max(1, Number(ctx.request.query?.page) || 1);
+      const pageSize = Math.max(1, Math.min(100, Number(ctx.request.query?.pageSize) || 10));
+      const start = (page - 1) * pageSize;
+      const sort = ctx.request.query?.sort || ['id:asc'];
+      const [results, total] = await Promise.all([
+        strapi.entityService.findMany(APP_TENANT_UID, {
+          filters: mergedFilters,
+          fields: Object.keys(strapi.getModel(APP_TENANT_UID)?.attributes || {}),
+          sort,
+          start,
+          limit: pageSize,
+          populate: {
+            brand_logo: true,
+          },
+        }),
+        strapi.db.query(APP_TENANT_UID).count({
+          where: mergedFilters,
+        }),
+      ]);
+
+      ctx.body = {
+        results,
+        pagination: {
+          page,
+          pageSize,
+          pageCount: Math.ceil(total / pageSize),
+          total,
+        },
+      };
+      return;
     }
 
     const { userAbility } = ctx.state;
@@ -304,7 +344,7 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
 
   controller.findOne = async (ctx) => {
     const model = ctx.params?.model;
-    if (model !== APP_USER_UID && model !== CONTACT_UID) {
+    if (model !== APP_USER_UID && model !== CONTACT_UID && model !== APP_TENANT_UID) {
       return originalFindOne(ctx);
     }
 
@@ -325,6 +365,26 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
     const entityId = parsePositiveInt(ctx.params?.id);
     if (!entityId) {
       return ctx.badRequest('Entry id must be a valid number.');
+    }
+
+    if (model === APP_TENANT_UID) {
+      if (!tenantContext.tenantIds.includes(entityId)) {
+        return ctx.forbidden('This tenant is outside your scope.');
+      }
+
+      const entity = await strapi.entityService.findOne(APP_TENANT_UID, entityId, {
+        fields: Object.keys(strapi.getModel(APP_TENANT_UID)?.attributes || {}),
+        populate: {
+          brand_logo: true,
+        },
+      });
+
+      if (!entity) {
+        return ctx.notFound();
+      }
+
+      ctx.body = entity;
+      return;
     }
 
     const allowed = await Promise.all(
@@ -449,7 +509,7 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
   }
 
   const originalGetOwnPermissions = controller.getOwnPermissions.bind(controller);
-  const managedSubjects = [APP_USER_UID, CONTACT_UID];
+  const managedSubjects = [APP_USER_UID, CONTACT_UID, APP_TENANT_UID];
   const fieldsBySubject = Object.fromEntries(
     managedSubjects.map((uid) => [uid, Object.keys(strapi.getModel(uid)?.attributes || {})])
   );
@@ -501,6 +561,182 @@ const escapeHtml = (value) => String(value)
   .replace(/>/g, '&gt;')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;');
+
+const ensureAbsoluteUrl = (value) => {
+  const normalized = String(value || '').trim();
+  return /^https?:\/\//i.test(normalized) ? normalized : '';
+};
+
+const buildTenantDeepLinkUrl = (tenant, tenantCode, referralCode) => {
+  const scheme = String(tenant?.android_deep_link_scheme || '').trim();
+  if (!scheme) {
+    return '';
+  }
+
+  const params = new URLSearchParams();
+  if (tenantCode) {
+    params.set('tenantCode', tenantCode);
+  }
+  if (referralCode) {
+    params.set('referralCode', referralCode);
+  }
+
+  const query = params.toString();
+  return `${scheme}://open${query ? `?${query}` : ''}`;
+};
+
+const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl }) => {
+  const appName = escapeHtml(tenant?.app_display_name || tenant?.name || 'Member Reward');
+  const primaryColor = /^#[0-9A-Fa-f]{6}$/.test(String(tenant?.primary_color || '').trim())
+    ? tenant.primary_color
+    : '#2F6BFF';
+  const installUrl = ensureAbsoluteUrl(tenant?.android_apk_url);
+  const deepLinkUrl = buildTenantDeepLinkUrl(tenant, tenantCode, referralCode);
+  const safeMessage = escapeHtml('Please open this link on an Android device.');
+  const safeQrUrl = escapeHtml(qrCodeUrl || '');
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${appName} | Open App</title>
+    <style>
+      :root {
+        --primary: ${escapeHtml(primaryColor)};
+        --text: #162038;
+        --muted: #61708c;
+        --surface: #ffffff;
+        --border: #dbe2ef;
+        --bg: linear-gradient(180deg, #f7faff 0%, #eef3fb 100%);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        color: var(--text);
+        background: var(--bg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .card {
+        width: min(100%, 480px);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        box-shadow: 0 24px 48px rgba(30, 53, 107, 0.12);
+        padding: 28px;
+      }
+      .eyebrow {
+        margin: 0 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--primary);
+        font-weight: 700;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 30px;
+        line-height: 1.1;
+      }
+      p {
+        margin: 0;
+        line-height: 1.65;
+        color: var(--muted);
+      }
+      .status {
+        margin-top: 18px;
+      }
+      .install-box {
+        display: none;
+        margin-top: 24px;
+      }
+      .install-button {
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 14px 18px;
+        border-radius: 14px;
+        background: var(--primary);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 700;
+      }
+      .hint {
+        margin-top: 12px;
+        font-size: 13px;
+      }
+      code {
+        display: block;
+        margin-top: 20px;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: #f5f7fb;
+        color: #34415e;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <p class="eyebrow">${appName}</p>
+      <h1>Open in app</h1>
+      <p id="message">Trying to open the Android app…</p>
+      <p class="status" id="status"></p>
+      <div class="install-box" id="installBox">
+        <a class="install-button" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
+        <p class="hint">If the app did not open, install the latest APK and try the QR again.</p>
+      </div>
+      ${safeQrUrl ? `<code>${safeQrUrl}</code>` : ''}
+    </main>
+    <script>
+      (function () {
+        var isAndroid = /Android/i.test(navigator.userAgent || "");
+        var installUrl = ${JSON.stringify(installUrl)};
+        var deepLinkUrl = ${JSON.stringify(deepLinkUrl)};
+        var installBox = document.getElementById("installBox");
+        var installButton = document.getElementById("installButton");
+        var message = document.getElementById("message");
+        var status = document.getElementById("status");
+
+        if (!isAndroid) {
+          message.textContent = ${JSON.stringify(safeMessage)};
+          status.textContent = "";
+          if (installButton) installButton.style.display = "none";
+          return;
+        }
+
+        if (!deepLinkUrl) {
+          message.textContent = "This tenant is missing a deep link scheme configuration.";
+          if (installButton) installButton.style.display = "none";
+          return;
+        }
+
+        if (!installUrl) {
+          message.textContent = "This tenant is missing an APK download URL.";
+        }
+
+        status.textContent = "If nothing happens, an install button will appear in a moment.";
+
+        setTimeout(function () {
+          if (installUrl && installBox) {
+            installBox.style.display = "block";
+          }
+        }, 2000);
+
+        setTimeout(function () {
+          window.location.href = deepLinkUrl;
+        }, 120);
+      })();
+    </script>
+  </body>
+</html>`;
+};
 
 const PRIVACY_POLICY_SECTIONS = [
   {
@@ -776,8 +1012,26 @@ module.exports = {
         return ctx.forbidden('This admin user is not assigned to a tenant.');
       }
 
-      if (slug === APP_TENANT_UID || slug === APP_TENANT_ADMIN_UID) {
+      if (slug === APP_TENANT_ADMIN_UID) {
         return ctx.forbidden('Tenant admin users cannot manage tenant configuration.');
+      }
+
+      if (slug === APP_TENANT_UID) {
+        const entityId = getContentManagerEntityId(ctx.request.path || '');
+
+        if (ctx.method === 'GET' && !entityId) {
+          withAdminTenantFilter(ctx, tenantContext.tenantIds);
+          return next();
+        }
+
+        if (ctx.method === 'GET' && entityId) {
+          if (!tenantContext.tenantIds.includes(entityId)) {
+            return ctx.forbidden('This tenant is outside your scope.');
+          }
+          return next();
+        }
+
+        return ctx.forbidden('Tenant admin users cannot modify tenant configuration.');
       }
 
       if (slug !== APP_USER_UID && slug !== CONTACT_UID) {
@@ -827,6 +1081,85 @@ module.exports = {
         handler: async (ctx) => {
           ctx.type = 'text/html; charset=utf-8';
           ctx.body = renderPrivacyPolicyHtml();
+        },
+        config: {
+          auth: false,
+        },
+      },
+      {
+        method: 'GET',
+        path: '/qr-install',
+        handler: async (ctx) => {
+          const tenantCode = String(
+            ctx.query?.tenantCode || ctx.query?.tenant || ctx.query?.tenantSlug || ''
+          ).trim();
+          const referralCode = String(ctx.query?.referralCode || '').trim();
+
+          if (!tenantCode) {
+            ctx.type = 'text/html; charset=utf-8';
+            ctx.status = 400;
+            ctx.body = renderQrLandingHtml({
+              tenant: {
+                app_display_name: 'Member Reward',
+                primary_color: '#2F6BFF',
+                android_apk_url: '',
+                android_deep_link_scheme: '',
+              },
+              tenantCode: '',
+              referralCode,
+              qrCodeUrl: '',
+            });
+            return;
+          }
+
+          const tenants = await strapi.entityService.findMany(APP_TENANT_UID, {
+            filters: {
+              slug: {
+                $eq: tenantCode,
+              },
+              status: {
+                $ne: 'inactive',
+              },
+            },
+            fields: [
+              'id',
+              'name',
+              'slug',
+              'status',
+              'app_display_name',
+              'primary_color',
+              'android_deep_link_scheme',
+              'android_apk_url',
+              'qr_code_url',
+            ],
+            limit: 1,
+          });
+
+          const tenant = tenants[0];
+          if (!tenant) {
+            ctx.type = 'text/html; charset=utf-8';
+            ctx.status = 404;
+            ctx.body = renderQrLandingHtml({
+              tenant: {
+                app_display_name: 'Member Reward',
+                primary_color: '#2F6BFF',
+                android_apk_url: '',
+                android_deep_link_scheme: '',
+              },
+              tenantCode,
+              referralCode,
+              qrCodeUrl: '',
+            });
+            return;
+          }
+
+          ctx.type = 'text/html; charset=utf-8';
+          ctx.body = renderQrLandingHtml({
+            tenant,
+            tenantCode: tenant.slug || tenantCode,
+            referralCode,
+            qrCodeUrl: tenant.qr_code_url || ctx.request.href,
+          });
         },
         config: {
           auth: false,
