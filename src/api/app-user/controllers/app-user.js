@@ -238,6 +238,56 @@ const withTenantFilters = (tenantId, extraFilters = null) => {
   };
 };
 
+const findUserByCompositeIdentity = async (strapi, tenantId, deviceId, phone, excludeUserId = null) => {
+  const normalizedDeviceId = String(deviceId || '').trim();
+  const normalizedPhone = normalizePhone(phone);
+
+  if (!tenantId || !normalizedDeviceId || !normalizedPhone) {
+    return null;
+  }
+
+  const extraFilters = {
+    device_id: {
+      $eq: normalizedDeviceId,
+    },
+    phone: {
+      $eq: normalizedPhone,
+    },
+  };
+
+  if (excludeUserId) {
+    extraFilters.id = {
+      $ne: excludeUserId,
+    };
+  }
+
+  const users = await strapi.entityService.findMany(APP_USER_UID, {
+    filters: withTenantFilters(tenantId, extraFilters),
+    fields: APP_USER_FIELDS,
+    sort: ['updatedAt:desc', 'id:desc'],
+    limit: 1,
+  });
+
+  return users[0] || null;
+};
+
+const rejectDuplicateCompositeIdentity = async (ctx, strapi, tenantId, data, excludeUserId = null) => {
+  const duplicateUser = await findUserByCompositeIdentity(
+    strapi,
+    tenantId,
+    data?.device_id,
+    data?.phone,
+    excludeUserId
+  );
+
+  if (!duplicateUser) {
+    return false;
+  }
+
+  ctx.badRequest('A user already exists for this tenant, device, and phone number combination.');
+  return true;
+};
+
 module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => ({
   async find(ctx) {
     const tenant = ctx.state.appTenant;
@@ -310,6 +360,10 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       return ctx.badRequest('A data object is required.');
     }
 
+    if (await rejectDuplicateCompositeIdentity(ctx, strapi, tenant.id, data)) {
+      return;
+    }
+
     const user = await strapi.entityService.create(APP_USER_UID, {
       data: {
         ...data,
@@ -344,6 +398,15 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     const data = ctx.request.body?.data;
     if (!data || typeof data !== 'object') {
       return ctx.badRequest('A data object is required.');
+    }
+
+    const compositeIdentityData = {
+      device_id: data.device_id ?? existingUser.device_id,
+      phone: data.phone ?? existingUser.phone,
+    };
+
+    if (await rejectDuplicateCompositeIdentity(ctx, strapi, tenant.id, compositeIdentityData, userId)) {
+      return;
     }
 
     const user = await strapi.entityService.update(APP_USER_UID, userId, {
@@ -537,29 +600,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
 
     const pendingEmail = buildPendingEmail(phone, deviceId, tenant);
 
-    const existingByDevice = await strapi.entityService.findMany(APP_USER_UID, {
-      filters: withTenantFilters(tenant.id, {
-        device_id: {
-          $eq: deviceId,
-        },
-      }),
-      fields: APP_USER_FIELDS,
-      limit: 1,
-    });
-
-    const existingByPhone = existingByDevice.length
-      ? []
-      : await strapi.entityService.findMany(APP_USER_UID, {
-          filters: withTenantFilters(tenant.id, {
-            phone: {
-              $eq: phone,
-            },
-          }),
-          fields: APP_USER_FIELDS,
-          limit: 1,
-        });
-
-    const existingUser = existingByDevice[0] || existingByPhone[0];
+    const existingUser = await findUserByCompositeIdentity(strapi, tenant.id, deviceId, phone);
 
     let user;
 
