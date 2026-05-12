@@ -586,7 +586,7 @@ const buildTenantDeepLinkUrl = (tenant, tenantCode, referralCode) => {
   return `${scheme}://open${query ? `?${query}` : ''}`;
 };
 
-const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl }) => {
+const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, isAndroidRequest }) => {
   const appName = escapeHtml(tenant?.app_display_name || tenant?.name || 'Member Reward');
   const primaryColor = /^#[0-9A-Fa-f]{6}$/.test(String(tenant?.primary_color || '').trim())
     ? tenant.primary_color
@@ -656,6 +656,12 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl }) =>
         display: none;
         margin-top: 24px;
       }
+      .install-box.android-delayed {
+        display: block;
+        opacity: 0;
+        visibility: hidden;
+        animation: revealInstall 0s linear 2.2s forwards;
+      }
       .install-button {
         width: 100%;
         display: inline-flex;
@@ -681,6 +687,12 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl }) =>
         color: #34415e;
         word-break: break-all;
       }
+      @keyframes revealInstall {
+        to {
+          opacity: 1;
+          visibility: visible;
+        }
+      }
     </style>
   </head>
   <body>
@@ -689,7 +701,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl }) =>
       <h1>Open in app</h1>
       <p id="message">Trying to open the Android app…</p>
       <p class="status" id="status"></p>
-      <div class="install-box" id="installBox">
+      <div class="install-box ${isAndroidRequest ? 'android-delayed' : ''}" id="installBox">
         <a class="install-button" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
         <p class="hint">If the app did not open, install the latest APK and try the QR again.</p>
       </div>
@@ -709,17 +721,26 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl }) =>
           message.textContent = ${JSON.stringify(safeMessage)};
           status.textContent = "";
           if (installButton) installButton.style.display = "none";
+          if (installBox) installBox.style.display = "none";
           return;
         }
 
         if (!deepLinkUrl) {
           message.textContent = "This tenant is missing a deep link scheme configuration.";
           if (installButton) installButton.style.display = "none";
+          if (installBox) {
+            installBox.style.display = "block";
+            installBox.style.opacity = "1";
+            installBox.style.visibility = "visible";
+          }
           return;
         }
 
         if (!installUrl) {
           message.textContent = "This tenant is missing an APK download URL.";
+          if (installButton) {
+            installButton.style.display = "none";
+          }
         }
 
         var appOpened = false;
@@ -741,6 +762,8 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl }) =>
         window.setTimeout(function () {
           if (!appOpened && installBox) {
             installBox.style.display = "block";
+            installBox.style.opacity = "1";
+            installBox.style.visibility = "visible";
             status.textContent = installUrl
               ? "App not detected. Install the latest Android APK below."
               : "App not detected, and this tenant is missing an APK download URL.";
@@ -1152,6 +1175,7 @@ module.exports = {
             ctx.query?.tenantCode || ctx.query?.tenant || ctx.query?.tenantSlug || ''
           ).trim();
           const referralCode = String(ctx.query?.referralCode || '').trim();
+          const isAndroidRequest = /Android/i.test(String(ctx.get('user-agent') || ''));
 
           if (!tenantCode) {
             ctx.type = 'text/html; charset=utf-8';
@@ -1166,6 +1190,7 @@ module.exports = {
               tenantCode: '',
               referralCode,
               qrCodeUrl: '',
+              isAndroidRequest,
             });
             return;
           }
@@ -1208,6 +1233,7 @@ module.exports = {
               tenantCode,
               referralCode,
               qrCodeUrl: '',
+              isAndroidRequest,
             });
             return;
           }
@@ -1224,6 +1250,7 @@ module.exports = {
             tenantCode: tenant.slug || tenantCode,
             referralCode,
             qrCodeUrl: tenant.qr_code_url || ctx.request.href,
+            isAndroidRequest,
           });
         },
         config: {
