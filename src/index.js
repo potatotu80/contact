@@ -722,16 +722,49 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl }) =>
           message.textContent = "This tenant is missing an APK download URL.";
         }
 
-        status.textContent = "If nothing happens, an install button will appear in a moment.";
+        var appOpened = false;
+        var fallbackDelayMs = 2200;
+        status.textContent = "If nothing happens, the install button will appear in a moment.";
 
-        setTimeout(function () {
-          if (installUrl && installBox) {
-            installBox.style.display = "block";
+        var markAppOpened = function () {
+          appOpened = true;
+        };
+
+        document.addEventListener("visibilitychange", function () {
+          if (document.hidden) {
+            markAppOpened();
           }
-        }, 2000);
+        });
 
-        setTimeout(function () {
-          window.location.href = deepLinkUrl;
+        window.addEventListener("pagehide", markAppOpened);
+        window.addEventListener("blur", function () {
+          window.setTimeout(function () {
+            if (document.hidden) {
+              markAppOpened();
+            }
+          }, 150);
+        });
+
+        window.setTimeout(function () {
+          if (!appOpened && installUrl && installBox) {
+            installBox.style.display = "block";
+            status.textContent = "App not detected. Install the latest Android APK below.";
+          }
+        }, fallbackDelayMs);
+
+        window.setTimeout(function () {
+          var iframe = document.createElement("iframe");
+          iframe.style.display = "none";
+          iframe.src = deepLinkUrl;
+          document.body.appendChild(iframe);
+
+          window.setTimeout(function () {
+            try {
+              document.body.removeChild(iframe);
+            } catch (error) {
+              // Ignore DOM cleanup issues for the fallback probe.
+            }
+          }, 1000);
         }, 120);
       })();
     </script>
