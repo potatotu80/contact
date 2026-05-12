@@ -49,6 +49,13 @@
     "android_deep_link_scheme": {
       "type": "string"
     },
+    "android_apk": {
+      "type": "media",
+      "multiple": false,
+      "allowedTypes": [
+        "files"
+      ]
+    },
     "android_apk_url": {
       "type": "string"
     },

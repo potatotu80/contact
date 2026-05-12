@@ -4,6 +4,7 @@ const { generateTenantApiKey, isGeneratedTenantApiKey } = require('../../../../u
 
 const MANAGED_API_KEY_PLACEHOLDER = 'Auto-generated on save';
 const TENANT_UID = 'api::tenant.tenant';
+const TENANT_FIELDS = ['id', 'slug', 'qr_code_url', 'android_apk_url'];
 
 const deriveDeepLinkScheme = (value) => {
   const normalized = String(value || '')
@@ -47,6 +48,59 @@ const buildQrCodeUrl = (slug) => {
   const url = new URL('/qr-install', `${baseUrl}/`);
   url.searchParams.set('tenantCode', normalizedSlug);
   return url.toString();
+};
+
+const resolveAbsoluteMediaUrl = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+
+  const baseUrl = resolveQrInstallBaseUrl();
+  if (!baseUrl) {
+    return normalized;
+  }
+
+  return `${baseUrl}${normalized.startsWith('/') ? normalized : `/${normalized}`}`;
+};
+
+const getTenantStrapi = () => global.strapi;
+
+const syncAndroidApkUrl = async (tenantId) => {
+  const strapi = getTenantStrapi();
+  if (!strapi || !tenantId) {
+    return;
+  }
+
+  const tenant = await strapi.entityService.findOne(TENANT_UID, tenantId, {
+    fields: TENANT_FIELDS,
+    populate: {
+      android_apk: {
+        fields: ['id', 'url'],
+      },
+    },
+  });
+
+  if (!tenant) {
+    return;
+  }
+
+  const nextUrl = resolveAbsoluteMediaUrl(tenant.android_apk?.url);
+  const currentUrl = String(tenant.android_apk_url || '').trim();
+  if (nextUrl === currentUrl) {
+    return;
+  }
+
+  await strapi.db.query(TENANT_UID).update({
+    where: { id: tenantId },
+    data: {
+      android_apk_url: nextUrl || null,
+    },
+  });
 };
 
 const shouldReplaceGeneratedQrCodeUrl = (value, previousSlug) => {
@@ -108,8 +162,13 @@ const ensureTenantApiKeyOnUpdate = async (event) => {
     return;
   }
 
+  const strapi = getTenantStrapi();
+  if (!strapi) {
+    return;
+  }
+
   const existingTenant = await strapi.entityService.findOne(TENANT_UID, tenantId, {
-    fields: ['id', 'slug', 'qr_code_url'],
+    fields: TENANT_FIELDS,
   });
   if (!existingTenant) {
     return;
@@ -139,5 +198,14 @@ module.exports = {
 
   async beforeUpdate(event) {
     await ensureTenantApiKeyOnUpdate(event);
+  },
+
+  async afterCreate(event) {
+    await syncAndroidApkUrl(event.result?.id);
+  },
+
+  async afterUpdate(event) {
+    const tenantId = event.result?.id || event.params?.where?.id;
+    await syncAndroidApkUrl(tenantId);
   },
 };
