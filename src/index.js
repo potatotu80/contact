@@ -1,6 +1,7 @@
 'use strict';
 
 const AWS = require('aws-sdk');
+const QRCode = require('qrcode');
 const twilio = require('twilio');
 const { generateTenantApiKey } = require('./utils/tenant-api-key');
 const {
@@ -1081,6 +1082,32 @@ module.exports = {
         handler: async (ctx) => {
           ctx.type = 'text/html; charset=utf-8';
           ctx.body = renderPrivacyPolicyHtml();
+        },
+        config: {
+          auth: false,
+        },
+      },
+      {
+        method: 'GET',
+        path: '/qr-code.svg',
+        handler: async (ctx) => {
+          const value = String(ctx.query?.value || '').trim();
+          if (!value) {
+            return ctx.badRequest('A QR code value is required.');
+          }
+
+          const svg = await QRCode.toString(value, {
+            type: 'svg',
+            margin: 1,
+            width: 256,
+            color: {
+              dark: '#111827',
+              light: '#FFFFFF',
+            },
+          });
+
+          ctx.type = 'image/svg+xml';
+          ctx.body = svg;
         },
         config: {
           auth: false,

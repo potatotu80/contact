@@ -815,6 +815,9 @@ const TenantKeyPanel = () => {
   const deepLinkScheme = String(
     modifiedData?.android_deep_link_scheme || initialData?.android_deep_link_scheme || ''
   ).trim();
+  const qrPreviewUrl = qrCodeUrl
+    ? `${window.location.origin}/qr-code.svg?value=${encodeURIComponent(qrCodeUrl)}`
+    : '';
 
   const copyApiKey = async () => {
     if (!apiKey) {
@@ -909,6 +912,34 @@ const TenantKeyPanel = () => {
         <ReadOnlyField label="QR Code URL" value={qrCodeUrl} monospace />
         <ReadOnlyField label="Android APK URL" value={apkUrl} monospace />
         <ReadOnlyField label="Active API Key" value={apiKey} monospace />
+
+        {qrPreviewUrl ? (
+          <Box>
+            <Typography variant="omega" textColor="neutral600">
+              QR Code Preview
+            </Typography>
+            <Box
+              style={{
+                marginTop: '8px',
+                padding: '12px',
+                border: '1px solid #dcdce4',
+                borderRadius: '12px',
+                background: '#ffffff',
+                display: 'inline-flex',
+              }}
+            >
+              <img
+                src={qrPreviewUrl}
+                alt="Tenant QR code"
+                style={{
+                  width: '180px',
+                  height: '180px',
+                  display: 'block',
+                }}
+              />
+            </Box>
+          </Box>
+        ) : null}
 
         <Flex gap={2} wrap="wrap">
           <Button

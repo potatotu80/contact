@@ -19,6 +19,7 @@
     "@twilio/voice-sdk": "^2.15.0",
     "aws-sdk": "^2.1693.0",
     "pg": "^8.16.3",
+    "qrcode": "^1.5.4",
     "twilio": "^5.9.0"
   },
   "author": {
