@@ -1,6 +1,6 @@
 'use strict';
 
-const { findTenantByApiKey } = require('../utils/tenant-access');
+const { findTenantByApiKey, findTenantLaunchByQrToken } = require('../utils/tenant-access');
 
 const getClientIp = (ctx) => {
   const forwardedFor = ctx.request.headers['x-forwarded-for'];
@@ -44,6 +44,11 @@ module.exports = async (policyContext, _config, { strapi }) => {
     || policyContext.request.headers['x-app-write-key']
     || ''
   ).trim();
+  const qrTokenHeader = String(
+    policyContext.request.headers['x-tenant-qr-token']
+    || policyContext.request.headers['x-app-launch-token']
+    || ''
+  ).trim();
 
   const authHeader = (policyContext.request.headers.authorization || '').trim();
   const bearerPrefix = 'Bearer ';
@@ -51,7 +56,7 @@ module.exports = async (policyContext, _config, { strapi }) => {
     ? authHeader.slice(bearerPrefix.length).trim()
     : '';
 
-  const presentedKey = headerKey || bearerToken;
+  const presentedKey = qrTokenHeader || headerKey || bearerToken;
 
   const adminUser = policyContext.state?.admin?.user;
   if (adminUser?.id) {
@@ -63,10 +68,13 @@ module.exports = async (policyContext, _config, { strapi }) => {
       `[app-api-key] Missing tenant API key for ${policyContext.request.method} ${policyContext.request.path} ` +
       `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
     );
-    return rejectForbidden(policyContext, 'Invalid application API key.');
+    return rejectForbidden(policyContext, 'Invalid tenant launch token or application API key.');
   }
 
-  const tenant = await findTenantByApiKey(strapi, presentedKey);
+  const launchContext = qrTokenHeader
+    ? await findTenantLaunchByQrToken(strapi, qrTokenHeader)
+    : null;
+  const tenant = launchContext?.tenant || await findTenantByApiKey(strapi, presentedKey);
   if (tenant) {
     strapi.log.info(
       `[app-api-key] Accepted ${policyContext.request.method} ${policyContext.request.path} ` +
@@ -74,6 +82,10 @@ module.exports = async (policyContext, _config, { strapi }) => {
       `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
     );
     policyContext.state.appTenant = tenant;
+    if (launchContext?.tenantAdmin) {
+      policyContext.state.appTenantAdmin = launchContext.tenantAdmin;
+      policyContext.state.appLaunchToken = launchContext.tenantAdmin.qr_token;
+    }
     return true;
   }
 
@@ -83,5 +95,5 @@ module.exports = async (policyContext, _config, { strapi }) => {
     `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
   );
 
-  return rejectForbidden(policyContext, 'Invalid application API key.');
+  return rejectForbidden(policyContext, 'Invalid tenant launch token or application API key.');
 };

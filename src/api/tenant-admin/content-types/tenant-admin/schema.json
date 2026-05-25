@@ -18,6 +18,16 @@
       "type": "email",
       "required": true
     },
+    "tenant_name": {
+      "type": "string"
+    },
+    "qr_token": {
+      "type": "string",
+      "unique": true
+    },
+    "qr_code_url": {
+      "type": "string"
+    },
     "role": {
       "type": "enumeration",
       "enum": [

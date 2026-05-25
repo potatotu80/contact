@@ -5,6 +5,11 @@ const QRCode = require('qrcode');
 const twilio = require('twilio');
 const { generateTenantApiKey } = require('./utils/tenant-api-key');
 const {
+  buildTenantAdminQrCodeUrl,
+  getSharedAndroidApplicationId,
+  getSharedDeepLinkScheme,
+} = require('./utils/app-launch');
+const {
   APP_TENANT_ADMIN_UID,
   APP_TENANT_UID,
   APP_USER_UID,
@@ -12,6 +17,7 @@ const {
   assertTenantScopeForContact,
   assertTenantScopeForUser,
   buildTenantUserImagePrefix,
+  findTenantLaunchByQrToken,
   getAdminTenantContext,
   getTenantIdsFilter,
   parsePositiveInt,
@@ -568,13 +574,16 @@ const ensureAbsoluteUrl = (value) => {
   return /^https?:\/\//i.test(normalized) ? normalized : '';
 };
 
-const buildTenantDeepLinkUrl = (tenant, tenantCode, referralCode) => {
-  const scheme = String(tenant?.android_deep_link_scheme || '').trim();
+const buildTenantDeepLinkUrl = ({ tenantCode, referralCode, qrToken }) => {
+  const scheme = getSharedDeepLinkScheme();
   if (!scheme) {
     return '';
   }
 
   const params = new URLSearchParams();
+  if (qrToken) {
+    params.set('qrToken', qrToken);
+  }
   if (tenantCode) {
     params.set('tenantCode', tenantCode);
   }
@@ -586,13 +595,36 @@ const buildTenantDeepLinkUrl = (tenant, tenantCode, referralCode) => {
   return `${scheme}://open${query ? `?${query}` : ''}`;
 };
 
-const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, isAndroidRequest }) => {
+const buildTenantIntentUrl = ({ tenantCode, referralCode, qrToken }) => {
+  const scheme = getSharedDeepLinkScheme();
+  const packageName = getSharedAndroidApplicationId();
+  if (!scheme || !packageName) {
+    return '';
+  }
+
+  const params = new URLSearchParams();
+  if (qrToken) {
+    params.set('qrToken', qrToken);
+  }
+  if (tenantCode) {
+    params.set('tenantCode', tenantCode);
+  }
+  if (referralCode) {
+    params.set('referralCode', referralCode);
+  }
+
+  const query = params.toString();
+  return `intent://open${query ? `?${query}` : ''}#Intent;scheme=${encodeURIComponent(scheme)};package=${encodeURIComponent(packageName)};end`;
+};
+
+const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrToken, isAndroidRequest }) => {
   const appName = escapeHtml(tenant?.app_display_name || tenant?.name || 'Member Reward');
   const primaryColor = /^#[0-9A-Fa-f]{6}$/.test(String(tenant?.primary_color || '').trim())
     ? tenant.primary_color
     : '#2F6BFF';
   const installUrl = ensureAbsoluteUrl(tenant?.android_apk_url);
-  const deepLinkUrl = buildTenantDeepLinkUrl(tenant, tenantCode, referralCode);
+  const deepLinkUrl = buildTenantDeepLinkUrl({ tenantCode, referralCode, qrToken });
+  const intentUrl = buildTenantIntentUrl({ tenantCode, referralCode, qrToken });
   const safeMessage = escapeHtml('Please open this link on an Android device.');
   const safeQrUrl = escapeHtml(qrCodeUrl || '');
 
@@ -705,6 +737,9 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, isAn
         <a class="install-button" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
         <p class="hint">If the app did not open, install the latest APK and try the QR again.</p>
       </div>
+      <div class="install-box" id="openAppBox">
+        <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
+      </div>
       ${safeQrUrl ? `<code>${safeQrUrl}</code>` : ''}
     </main>
     <script>
@@ -712,8 +747,10 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, isAn
         var isAndroid = /Android/i.test(navigator.userAgent || "");
         var installUrl = ${JSON.stringify(installUrl)};
         var deepLinkUrl = ${JSON.stringify(deepLinkUrl)};
+        var intentUrl = ${JSON.stringify(intentUrl)};
         var installBox = document.getElementById("installBox");
         var installButton = document.getElementById("installButton");
+        var openAppBox = document.getElementById("openAppBox");
         var message = document.getElementById("message");
         var status = document.getElementById("status");
 
@@ -722,16 +759,22 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, isAn
           status.textContent = "";
           if (installButton) installButton.style.display = "none";
           if (installBox) installBox.style.display = "none";
+          if (openAppBox) openAppBox.style.display = "none";
           return;
         }
 
         if (!deepLinkUrl) {
-          message.textContent = "This tenant is missing a deep link scheme configuration.";
-          if (installButton) installButton.style.display = "none";
+          message.textContent = "This app link is missing QR launch metadata.";
+          if (installButton) {
+            installButton.style.display = installUrl ? "inline-flex" : "none";
+          }
           if (installBox) {
             installBox.style.display = "block";
             installBox.style.opacity = "1";
             installBox.style.visibility = "visible";
+          }
+          if (openAppBox) {
+            openAppBox.style.display = "none";
           }
           return;
         }
@@ -743,24 +786,11 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, isAn
           }
         }
 
-        var appOpened = false;
         var fallbackDelayMs = 2200;
         status.textContent = "If nothing happens, the install button will appear in a moment.";
 
-        var markAppOpened = function () {
-          appOpened = true;
-        };
-
-        document.addEventListener("visibilitychange", function () {
-          if (document.hidden) {
-            markAppOpened();
-          }
-        });
-
-        window.addEventListener("pagehide", markAppOpened);
-
         window.setTimeout(function () {
-          if (!appOpened && installBox) {
+          if (installBox) {
             installBox.style.display = "block";
             installBox.style.opacity = "1";
             installBox.style.visibility = "visible";
@@ -771,9 +801,17 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, isAn
               installButton.style.display = "none";
             }
           }
+          if (openAppBox && (intentUrl || deepLinkUrl)) {
+            openAppBox.style.display = "block";
+          }
         }, fallbackDelayMs);
 
         window.setTimeout(function () {
+          if (intentUrl) {
+            window.location.assign(intentUrl);
+            return;
+          }
+
           var iframe = document.createElement("iframe");
           iframe.style.display = "none";
           iframe.src = deepLinkUrl;
@@ -1171,13 +1209,14 @@ module.exports = {
         method: 'GET',
         path: '/qr-install',
         handler: async (ctx) => {
+          const qrToken = String(ctx.query?.qrToken || ctx.query?.token || '').trim();
           const tenantCode = String(
             ctx.query?.tenantCode || ctx.query?.tenant || ctx.query?.tenantSlug || ''
           ).trim();
           const referralCode = String(ctx.query?.referralCode || '').trim();
           const isAndroidRequest = /Android/i.test(String(ctx.get('user-agent') || ''));
 
-          if (!tenantCode) {
+          if (!tenantCode && !qrToken) {
             ctx.type = 'text/html; charset=utf-8';
             ctx.status = 400;
             ctx.body = renderQrLandingHtml({
@@ -1185,9 +1224,9 @@ module.exports = {
                 app_display_name: 'Member Reward',
                 primary_color: '#2F6BFF',
                 android_apk_url: '',
-                android_deep_link_scheme: '',
               },
               tenantCode: '',
+              qrToken: '',
               referralCode,
               qrCodeUrl: '',
               isAndroidRequest,
@@ -1195,7 +1234,10 @@ module.exports = {
             return;
           }
 
-          const tenants = await strapi.entityService.findMany(APP_TENANT_UID, {
+          const launchContext = qrToken
+            ? await findTenantLaunchByQrToken(strapi, qrToken)
+            : null;
+          const tenant = launchContext?.tenant || (await strapi.entityService.findMany(APP_TENANT_UID, {
             filters: {
               slug: {
                 $eq: tenantCode,
@@ -1211,16 +1253,16 @@ module.exports = {
               'status',
               'app_display_name',
               'primary_color',
-              'android_deep_link_scheme',
               'android_apk_url',
               'qr_code_url',
             ],
             limit: 1,
-          });
+          }))[0];
 
-          const tenant = tenants[0];
           if (!tenant) {
-            strapi.log.warn(`[qr-install] Missing tenant for tenantCode="${tenantCode}" referralCode="${referralCode}"`);
+            strapi.log.warn(
+              `[qr-install] Missing tenant for tenantCode="${tenantCode}" qrTokenPresent=${Boolean(qrToken)} referralCode="${referralCode}"`
+            );
             ctx.type = 'text/html; charset=utf-8';
             ctx.status = 404;
             ctx.body = renderQrLandingHtml({
@@ -1228,9 +1270,9 @@ module.exports = {
                 app_display_name: 'Member Reward',
                 primary_color: '#2F6BFF',
                 android_apk_url: '',
-                android_deep_link_scheme: '',
               },
               tenantCode,
+              qrToken,
               referralCode,
               qrCodeUrl: '',
               isAndroidRequest,
@@ -1239,19 +1281,56 @@ module.exports = {
           }
 
           strapi.log.info(
-            `[qr-install] tenant="${tenant.slug}" deepLinkScheme="${tenant.android_deep_link_scheme || ''}" apkUrlPresent=${Boolean(
+            `[qr-install] tenant="${tenant.slug}" sharedDeepLinkScheme="${getSharedDeepLinkScheme()}" apkUrlPresent=${Boolean(
               ensureAbsoluteUrl(tenant.android_apk_url)
-            )} qrCodeUrl="${tenant.qr_code_url || ''}" referralCode="${referralCode}"`
+            )} qrCodeUrl="${launchContext?.tenantAdmin?.qr_code_url || tenant.qr_code_url || ''}" qrTokenPresent=${Boolean(
+              qrToken
+            )} referralCode="${referralCode}"`
           );
 
           ctx.type = 'text/html; charset=utf-8';
           ctx.body = renderQrLandingHtml({
             tenant,
             tenantCode: tenant.slug || tenantCode,
+            qrToken: qrToken || launchContext?.tenantAdmin?.qr_token || '',
             referralCode,
-            qrCodeUrl: tenant.qr_code_url || ctx.request.href,
+            qrCodeUrl: launchContext?.tenantAdmin?.qr_code_url || tenant.qr_code_url || ctx.request.href,
             isAndroidRequest,
           });
+        },
+        config: {
+          auth: false,
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/app-bootstrap',
+        handler: async (ctx) => {
+          const qrToken = String(ctx.query?.qrToken || ctx.query?.token || '').trim();
+          if (!qrToken) {
+            return ctx.badRequest('A qrToken query parameter is required.');
+          }
+
+          const launchContext = await findTenantLaunchByQrToken(strapi, qrToken);
+          if (!launchContext?.tenant) {
+            return ctx.forbidden('Invalid tenant QR token.');
+          }
+
+          const tenant = launchContext.tenant;
+          const tenantAdmin = launchContext.tenantAdmin;
+
+          ctx.body = {
+            data: {
+              tenantCode: tenant.slug,
+              tenantName: tenantAdmin?.tenant_name || tenant.app_display_name || tenant.name,
+              appDisplayName: tenant.app_display_name || tenant.name,
+              primaryColor: tenant.primary_color || null,
+              supportEmail: tenant.support_email || null,
+              deepLinkScheme: getSharedDeepLinkScheme(),
+              androidApplicationId: getSharedAndroidApplicationId(),
+              qrCodeUrl: tenantAdmin?.qr_code_url || null,
+            },
+          };
         },
         config: {
           auth: false,

@@ -33,6 +33,59 @@ const findTenantByApiKey = async (strapi, apiKey) => {
   return tenants[0] || null;
 };
 
+const findTenantLaunchByQrToken = async (strapi, qrToken) => {
+  const token = String(qrToken || '').trim();
+  if (!token) {
+    return null;
+  }
+
+  const tenantAdmins = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+    filters: {
+      qr_token: {
+        $eq: token,
+      },
+      tenant: {
+        status: {
+          $ne: 'inactive',
+        },
+      },
+    },
+    fields: ['id', 'admin_email', 'tenant_name', 'qr_token', 'qr_code_url'],
+    populate: {
+      tenant: {
+        fields: [
+          'id',
+          'name',
+          'slug',
+          'app_api_key',
+          'status',
+          'app_display_name',
+          'primary_color',
+          'support_email',
+          'android_apk_url',
+        ],
+      },
+    },
+    limit: 1,
+  });
+
+  const tenantAdmin = tenantAdmins[0] || null;
+  if (!tenantAdmin?.tenant) {
+    return null;
+  }
+
+  return {
+    tenant: tenantAdmin.tenant,
+    tenantAdmin: {
+      id: tenantAdmin.id,
+      admin_email: tenantAdmin.admin_email || null,
+      tenant_name: tenantAdmin.tenant_name || null,
+      qr_token: tenantAdmin.qr_token || token,
+      qr_code_url: tenantAdmin.qr_code_url || null,
+    },
+  };
+};
+
 const resolveAdminUser = async (strapi, adminUser) => {
   if (!adminUser?.id) {
     return null;
@@ -236,6 +289,7 @@ module.exports = {
   buildTenantLocalImagePath,
   buildTenantUserImagePrefix,
   findTenantByApiKey,
+  findTenantLaunchByQrToken,
   getAdminTenantContext,
   getContactTenantId,
   getStorageTenantSegment,

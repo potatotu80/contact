@@ -702,6 +702,11 @@ const useTenantAdminFormEnhancements = ({ slug }) => {
         adminEmailInput.placeholder = 'Enter the Strapi admin email to assign';
         adminEmailInput.autocomplete = 'email';
       }
+
+      const tenantNameInput = findFieldInput('tenant_name');
+      if (tenantNameInput) {
+        tenantNameInput.placeholder = 'Enter the customer-facing tenant name for this admin QR';
+      }
     };
 
     const intervalId = window.setInterval(applyEnhancements, 600);
@@ -906,6 +911,10 @@ const TenantKeyPanel = () => {
           Tenant Security
         </Typography>
 
+        <Typography variant="omega" textColor="neutral500">
+          Customer QR links are now generated per Tenant Admin. Open a Tenant Admin record to copy the unique QR URL.
+        </Typography>
+
         <ReadOnlyField label="Tenant Slug" value={initialData?.slug} />
         <ReadOnlyField label="Android Application Id" value={initialData?.android_application_id} />
         <ReadOnlyField label="Deep Link Scheme" value={deepLinkScheme} monospace />
@@ -1068,9 +1077,110 @@ const DefaultTenantListSort = () => {
 };
 
 const TenantAdminPanel = () => {
-  const { slug } = useCMEditViewDataManager();
+  const { slug, initialData, modifiedData } = useCMEditViewDataManager();
   useTenantAdminFormEnhancements({ slug });
-  return null;
+
+  if (slug !== TENANT_ADMIN_UID) return null;
+
+  if (!initialData?.id) {
+    return (
+      <Box
+        background="neutral0"
+        borderColor="neutral200"
+        hasRadius
+        padding={4}
+        shadow="tableShadow"
+      >
+        <Flex direction="column" gap={3}>
+          <Typography variant="pi" textColor="neutral600">
+            Tenant Admin QR
+          </Typography>
+
+          <Typography variant="omega" textColor="neutral500">
+            Save this tenant admin first to generate a unique QR URL and QR preview.
+          </Typography>
+        </Flex>
+      </Box>
+    );
+  }
+
+  const qrCodeUrl = String(modifiedData?.qr_code_url || initialData?.qr_code_url || '').trim();
+  const qrToken = String(modifiedData?.qr_token || initialData?.qr_token || '').trim();
+  const tenantName = String(modifiedData?.tenant_name || initialData?.tenant_name || '').trim();
+  const tenantRecord = extractTenantRecord(modifiedData?.tenant) || extractTenantRecord(initialData?.tenant);
+  const qrPreviewUrl = qrCodeUrl
+    ? `${window.location.origin}/qr-code.svg?value=${encodeURIComponent(qrCodeUrl)}`
+    : '';
+
+  const copyQrCodeUrl = async () => {
+    if (!qrCodeUrl) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(qrCodeUrl);
+    } catch (error) {
+      // Ignore clipboard failures in the lightweight panel.
+    }
+  };
+
+  return (
+    <Box
+      background="neutral0"
+      borderColor="neutral200"
+      hasRadius
+      padding={4}
+      shadow="tableShadow"
+    >
+      <Flex direction="column" gap={3}>
+        <Typography variant="pi" textColor="neutral600">
+          Tenant Admin QR
+        </Typography>
+
+        <ReadOnlyField label="Tenant Name" value={tenantName} />
+        <ReadOnlyField label="Linked Tenant" value={tenantRecord?.name || tenantRecord?.slug || 'Not set'} />
+        <ReadOnlyField label="QR URL" value={qrCodeUrl} monospace />
+        <ReadOnlyField label="QR Token" value={qrToken} monospace />
+
+        {qrPreviewUrl ? (
+          <Box>
+            <Typography variant="omega" textColor="neutral600">
+              QR Code Preview
+            </Typography>
+            <Box
+              style={{
+                marginTop: '8px',
+                padding: '12px',
+                border: '1px solid #dcdce4',
+                borderRadius: '12px',
+                background: '#ffffff',
+                display: 'inline-flex',
+              }}
+            >
+              <img
+                src={qrPreviewUrl}
+                alt="Tenant admin QR code"
+                style={{
+                  width: '180px',
+                  height: '180px',
+                  display: 'block',
+                }}
+              />
+            </Box>
+          </Box>
+        ) : null}
+
+        <Button
+          variant="secondary"
+          size="S"
+          onClick={copyQrCodeUrl}
+          disabled={!qrCodeUrl}
+        >
+          Copy QR URL
+        </Button>
+      </Flex>
+    </Box>
+  );
 };
 
 const config = {
