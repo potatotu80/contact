@@ -12,7 +12,13 @@
   },
   "config": {
     "settings": {
-      "mainField": "tenant_name"
+      "bulkable": true,
+      "filterable": true,
+      "pageSize": 10,
+      "searchable": true,
+      "mainField": "tenant_name",
+      "defaultSortBy": "tenant_name",
+      "defaultSortOrder": "ASC"
     },
     "layouts": {
       "list": [
