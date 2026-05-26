@@ -1504,11 +1504,11 @@ module.exports = {
         const data = getRequestData(ctx);
         const tenantIds = resolveTenantRelationIds(data?.tenant);
         if (tenantIds.length > 1) {
-          if (!ctx.request.body?.data || typeof ctx.request.body.data !== 'object') {
-            return ctx.badRequest('Tenant Admin bulk creation requires a structured request body.');
+          const createPayload = getRequestData(ctx);
+          if (!createPayload || typeof createPayload !== 'object') {
+            return ctx.badRequest('Tenant Admin bulk creation requires a valid request body.');
           }
 
-          const createPayload = ctx.request.body.data;
           const createdRecords = [];
           for (const tenantId of tenantIds) {
             const nextData = {
