@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { ExternalLink } from '@strapi/icons';
 import { useCMEditViewDataManager, useFetchClient, useNotification } from '@strapi/helper-plugin';
@@ -808,6 +809,7 @@ const TenantAdminCreateTenantSelector = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingTenantId, setPendingTenantId] = useState('');
+  const [mountNode, setMountNode] = useState(null);
   const isCreatePage = slug === TENANT_ADMIN_UID;
   const [selectedTenantIds, setSelectedTenantIds] = useState([]);
 
@@ -856,6 +858,65 @@ const TenantAdminCreateTenantSelector = () => {
       isMounted = false;
     };
   }, [get, isCreatePage, toggleNotification]);
+
+  useEffect(() => {
+    if (!isCreatePage) {
+      setMountNode(null);
+      return undefined;
+    }
+
+    let disposed = false;
+    let hostNode = null;
+    let targetContainer = null;
+    let restoreDisplay = null;
+
+    const attach = () => {
+      if (disposed) {
+        return;
+      }
+
+      targetContainer =
+        findFieldContainer('tenant') ||
+        findFieldContainerByLabel(['Linked Tenant', 'Tenant']);
+
+      if (!targetContainer || !targetContainer.parentElement) {
+        return;
+      }
+
+      if (!hostNode) {
+        hostNode = document.createElement('div');
+        hostNode.dataset.tenantAdminBulkCreateHost = 'true';
+        hostNode.style.marginTop = '8px';
+      }
+
+      if (!hostNode.parentElement) {
+        targetContainer.parentElement.insertBefore(hostNode, targetContainer.nextSibling);
+      }
+
+      if (restoreDisplay === null) {
+        restoreDisplay = targetContainer.style.display;
+      }
+      targetContainer.style.display = 'none';
+      setMountNode(hostNode);
+    };
+
+    const timer = window.setInterval(attach, 500);
+    attach();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      setMountNode(null);
+
+      if (targetContainer) {
+        targetContainer.style.display = restoreDisplay ?? '';
+      }
+
+      if (hostNode?.parentElement) {
+        hostNode.parentElement.removeChild(hostNode);
+      }
+    };
+  }, [isCreatePage]);
 
   const submitCreate = async () => {
     if (isSubmitting) {
@@ -938,7 +999,7 @@ const TenantAdminCreateTenantSelector = () => {
     setSelectedTenantIds((current) => current.filter((id) => id !== tenantId));
   };
 
-  return (
+  const content = (
     <Box
       background="neutral0"
       borderColor="neutral200"
@@ -1059,6 +1120,12 @@ const TenantAdminCreateTenantSelector = () => {
       </Flex>
     </Box>
   );
+
+  if (mountNode) {
+    return createPortal(content, mountNode);
+  }
+
+  return content;
 };
 
 const ReadOnlyField = ({ label, value, monospace = false }) => (
