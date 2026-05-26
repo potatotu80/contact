@@ -221,6 +221,14 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
   const originalFind = controller.find.bind(controller);
   const originalFindOne = controller.findOne.bind(controller);
   const getForcedTenantPopulate = (model) => {
+    if (model === APP_TENANT_ADMIN_UID) {
+      return {
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      };
+    }
+
     if (model === APP_USER_UID) {
       return {
         tenant: {
@@ -250,7 +258,7 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
 
   controller.find = async (ctx) => {
     const model = ctx.params?.model;
-    if (model !== APP_USER_UID && model !== CONTACT_UID && model !== APP_TENANT_UID) {
+    if (model !== APP_USER_UID && model !== CONTACT_UID && model !== APP_TENANT_UID && model !== APP_TENANT_ADMIN_UID) {
       return originalFind(ctx);
     }
 
@@ -292,6 +300,57 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
           },
         }),
         strapi.db.query(APP_TENANT_UID).count({
+          where: mergedFilters,
+        }),
+      ]);
+
+      ctx.body = {
+        results,
+        pagination: {
+          page,
+          pageSize,
+          pageCount: Math.ceil(total / pageSize),
+          total,
+        },
+      };
+      return;
+    }
+
+    if (model === APP_TENANT_ADMIN_UID) {
+      const mergedFilters =
+        ctx.request.query?.filters && Object.keys(ctx.request.query.filters).length
+          ? {
+              $and: [
+                ctx.request.query.filters,
+                { admin_user_id: { $eq: adminUser.id } },
+                { tenant: { id: { $in: tenantContext.tenantIds } } },
+              ],
+            }
+          : {
+              $and: [
+                { admin_user_id: { $eq: adminUser.id } },
+                { tenant: { id: { $in: tenantContext.tenantIds } } },
+              ],
+            };
+
+      const page = Math.max(1, Number(ctx.request.query?.page) || 1);
+      const pageSize = Math.max(1, Math.min(100, Number(ctx.request.query?.pageSize) || 10));
+      const start = (page - 1) * pageSize;
+      const sort = ctx.request.query?.sort || ['id:asc'];
+      const [results, total] = await Promise.all([
+        strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+          filters: mergedFilters,
+          fields: Object.keys(strapi.getModel(APP_TENANT_ADMIN_UID)?.attributes || {}),
+          sort,
+          start,
+          limit: pageSize,
+          populate: {
+            tenant: {
+              fields: ['id', 'name', 'slug'],
+            },
+          },
+        }),
+        strapi.db.query(APP_TENANT_ADMIN_UID).count({
           where: mergedFilters,
         }),
       ]);
@@ -351,7 +410,7 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
 
   controller.findOne = async (ctx) => {
     const model = ctx.params?.model;
-    if (model !== APP_USER_UID && model !== CONTACT_UID && model !== APP_TENANT_UID) {
+    if (model !== APP_USER_UID && model !== CONTACT_UID && model !== APP_TENANT_UID && model !== APP_TENANT_ADMIN_UID) {
       return originalFindOne(ctx);
     }
 
@@ -391,6 +450,38 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       }
 
       ctx.body = entity;
+      return;
+    }
+
+    if (model === APP_TENANT_ADMIN_UID) {
+      const entity = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+        filters: {
+          id: {
+            $eq: entityId,
+          },
+          admin_user_id: {
+            $eq: adminUser.id,
+          },
+          tenant: {
+            id: {
+              $in: tenantContext.tenantIds,
+            },
+          },
+        },
+        fields: Object.keys(strapi.getModel(APP_TENANT_ADMIN_UID)?.attributes || {}),
+        populate: {
+          tenant: {
+            fields: ['id', 'name', 'slug'],
+          },
+        },
+        limit: 1,
+      });
+
+      if (!entity[0]) {
+        return ctx.forbidden('This tenant admin record is outside your scope.');
+      }
+
+      ctx.body = entity[0];
       return;
     }
 
@@ -516,7 +607,7 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
   }
 
   const originalGetOwnPermissions = controller.getOwnPermissions.bind(controller);
-  const managedSubjects = [APP_USER_UID, CONTACT_UID, APP_TENANT_UID];
+  const managedSubjects = [APP_USER_UID, CONTACT_UID, APP_TENANT_UID, APP_TENANT_ADMIN_UID];
   const fieldsBySubject = Object.fromEntries(
     managedSubjects.map((uid) => [uid, Object.keys(strapi.getModel(uid)?.attributes || {})])
   );
@@ -553,6 +644,32 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
         },
       };
     });
+
+    const hasTenantAdminReadPermission = expandedPermissions.some(
+      (permission) =>
+        permission.subject === APP_TENANT_ADMIN_UID &&
+        String(permission.action || '').endsWith('.read')
+    );
+
+    if (!hasTenantAdminReadPermission) {
+      const templateReadPermission = expandedPermissions.find(
+        (permission) =>
+          managedSubjects.includes(permission.subject) &&
+          permission.subject !== APP_TENANT_ADMIN_UID &&
+          String(permission.action || '').endsWith('.read')
+      );
+
+      if (templateReadPermission) {
+        expandedPermissions.push({
+          ...templateReadPermission,
+          subject: APP_TENANT_ADMIN_UID,
+          properties: {
+            ...(templateReadPermission.properties || {}),
+            fields: fieldsBySubject[APP_TENANT_ADMIN_UID],
+          },
+        });
+      }
+    }
 
     ctx.body = {
       data: expandedPermissions.map(sanitizePermission),
@@ -1106,7 +1223,11 @@ module.exports = {
       }
 
       if (slug === APP_TENANT_ADMIN_UID) {
-        return ctx.forbidden('Tenant admin users cannot manage tenant configuration.');
+        if (ctx.method === 'GET') {
+          return next();
+        }
+
+        return ctx.forbidden('Tenant admin users cannot modify tenant admin mappings.');
       }
 
       if (slug === APP_TENANT_UID) {
