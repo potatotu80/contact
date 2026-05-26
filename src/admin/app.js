@@ -97,6 +97,18 @@ const serializeTenantAdminBulkTenantIds = (tenantIds) => (
   `${TENANT_ADMIN_BULK_SENTINEL}${JSON.stringify(tenantIds)}`
 );
 
+const syncInputValue = (input, value) => {
+  if (!input) {
+    return;
+  }
+
+  const nextValue = String(value ?? '');
+  const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+  descriptor?.set?.call(input, nextValue);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+};
+
 const formatCallDuration = (seconds) => {
   const safeSeconds = Math.max(0, Number(seconds) || 0);
   const hours = Math.floor(safeSeconds / 3600);
@@ -821,13 +833,18 @@ const TenantAdminCreateTenantSelector = () => {
       return;
     }
 
+    const serializedTenantIds = serializeTenantAdminBulkTenantIds(selectedTenantIds);
+
     onChange({
       target: {
         name: 'qr_code_url',
-        value: serializeTenantAdminBulkTenantIds(selectedTenantIds),
+        value: serializedTenantIds,
         type: 'string',
       },
     });
+
+    const qrCodeUrlInput = findFieldInput('qr_code_url');
+    syncInputValue(qrCodeUrlInput, serializedTenantIds);
   }, [isCreatePage, onChange, selectedTenantIds]);
 
   useEffect(() => {
