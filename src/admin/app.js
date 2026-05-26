@@ -810,6 +810,7 @@ const TenantAdminCreateTenantSelector = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingTenantId, setPendingTenantId] = useState('');
   const [mountNode, setMountNode] = useState(null);
+  const [actionMountNode, setActionMountNode] = useState(null);
   const isCreatePage = slug === TENANT_ADMIN_UID;
   const [selectedTenantIds, setSelectedTenantIds] = useState([]);
 
@@ -862,12 +863,15 @@ const TenantAdminCreateTenantSelector = () => {
   useEffect(() => {
     if (!isCreatePage) {
       setMountNode(null);
+      setActionMountNode(null);
       return undefined;
     }
 
     let disposed = false;
     let hostNode = null;
+    let actionHostNode = null;
     let targetContainer = null;
+    let tenantNameContainer = null;
     let restoreDisplay = null;
 
     const attach = () => {
@@ -898,6 +902,24 @@ const TenantAdminCreateTenantSelector = () => {
       }
       targetContainer.style.display = 'none';
       setMountNode(hostNode);
+
+      tenantNameContainer = findFieldContainer('tenant_name') || findFieldContainerByLabel(['Tenant Name']);
+      if (tenantNameContainer?.parentElement) {
+        if (!actionHostNode) {
+          actionHostNode = document.createElement('div');
+          actionHostNode.dataset.tenantAdminBulkCreateActionHost = 'true';
+          actionHostNode.style.display = 'flex';
+          actionHostNode.style.justifyContent = 'flex-end';
+          actionHostNode.style.alignItems = 'flex-end';
+          actionHostNode.style.width = '100%';
+        }
+
+        if (!actionHostNode.parentElement) {
+          tenantNameContainer.parentElement.insertBefore(actionHostNode, tenantNameContainer.nextSibling);
+        }
+
+        setActionMountNode(actionHostNode);
+      }
     };
 
     const timer = window.setInterval(attach, 500);
@@ -907,6 +929,7 @@ const TenantAdminCreateTenantSelector = () => {
       disposed = true;
       window.clearInterval(timer);
       setMountNode(null);
+      setActionMountNode(null);
 
       if (targetContainer) {
         targetContainer.style.display = restoreDisplay ?? '';
@@ -914,6 +937,10 @@ const TenantAdminCreateTenantSelector = () => {
 
       if (hostNode?.parentElement) {
         hostNode.parentElement.removeChild(hostNode);
+      }
+
+      if (actionHostNode?.parentElement) {
+        actionHostNode.parentElement.removeChild(actionHostNode);
       }
     };
   }, [isCreatePage]);
@@ -1128,25 +1155,38 @@ const TenantAdminCreateTenantSelector = () => {
             </Typography>
           )}
         </Box>
-        <Flex justifyContent="flex-end">
-          <Button
-            type="button"
-            onClick={submitCreate}
-            loading={isSubmitting}
-            disabled={isLoading}
-          >
-            Create tenant admin records
-          </Button>
-        </Flex>
       </Flex>
     </Box>
   );
 
-  if (mountNode) {
-    return createPortal(content, mountNode);
+  const actionContent = (
+    <Button
+      type="button"
+      onClick={submitCreate}
+      loading={isSubmitting}
+      disabled={isLoading}
+    >
+      Create tenant admin records
+    </Button>
+  );
+
+  if (mountNode || actionMountNode) {
+    return (
+      <>
+        {mountNode ? createPortal(content, mountNode) : null}
+        {actionMountNode ? createPortal(actionContent, actionMountNode) : null}
+      </>
+    );
   }
 
-  return content;
+  return (
+    <>
+      {content}
+      <Flex justifyContent="flex-end" marginTop={3}>
+        {actionContent}
+      </Flex>
+    </>
+  );
 };
 
 const ReadOnlyField = ({ label, value, monospace = false }) => (
