@@ -968,9 +968,7 @@ const TenantAdminCreateTenantSelector = () => {
 
         try {
           setIsSubmitting(true);
-          await post(`/content-manager/collection-types/${TENANT_ADMIN_UID}`, {
-            data: payload,
-          });
+          await post(`/content-manager/collection-types/${TENANT_ADMIN_UID}`, payload);
           toggleNotification({
             type: 'success',
             message: selectedTenantIds.length > 1
@@ -1110,15 +1108,15 @@ const TenantAdminCreateTenantSelector = () => {
             disabled={!pendingTenantId || isSubmitting}
             onClick={addSelectedTenant}
           >
-            Add tenant
+            Add
           </Button>
         </Flex>
 
         <Box
-          background="neutral100"
+          background="neutral0"
           borderColor="neutral200"
           hasRadius
-          padding={3}
+          padding={2}
         >
           {selectedOptions.length ? (
             <Flex gap={2} wrap="wrap">
@@ -1128,10 +1126,10 @@ const TenantAdminCreateTenantSelector = () => {
                   background="primary100"
                   borderColor="primary200"
                   hasRadius
-                  paddingLeft={3}
+                  paddingLeft={2}
                   paddingRight={2}
-                  paddingTop={2}
-                  paddingBottom={2}
+                  paddingTop={1}
+                  paddingBottom={1}
                 >
                   <Flex gap={2} alignItems="center">
                     <Typography variant="pi" textColor="primary700">
@@ -1146,7 +1144,7 @@ const TenantAdminCreateTenantSelector = () => {
                         background: 'transparent',
                         color: '#4945ff',
                         cursor: isSubmitting ? 'default' : 'pointer',
-                        fontSize: '16px',
+                        fontSize: '14px',
                         lineHeight: 1,
                         padding: 0,
                       }}
@@ -1175,7 +1173,7 @@ const TenantAdminCreateTenantSelector = () => {
           lineHeight: 1.5,
         }}
       >
-        Saving will create one Tenant Admin record per selected tenant. Existing admin email is required.
+        Creates one Tenant Admin record per selected tenant.
       </Typography>
     </Box>,
     portalNode
@@ -1695,7 +1693,7 @@ const TenantAdminPanel = () => {
             </Typography>
 
             <Typography variant="omega" textColor="neutral500">
-              You can add multiple linked tenants here. Saving will create one Tenant Admin record per tenant, each with its own QR URL and QR preview.
+              One QR record will be created per selected tenant.
             </Typography>
           </Flex>
         </Box>
