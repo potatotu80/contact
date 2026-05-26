@@ -1085,6 +1085,134 @@ const DefaultTenantListSort = () => {
   return null;
 };
 
+const TenantAdminQrListCopyButtons = () => {
+  const match = useRouteMatch('/content-manager/collectionType/:slug');
+  const slug = match?.params?.slug;
+  const toggleNotification = useNotification();
+
+  useEffect(() => {
+    if (slug !== TENANT_ADMIN_UID) {
+      return undefined;
+    }
+
+    let isDisposed = false;
+    let observer = null;
+
+    const copyText = async (value) => {
+      if (!value) return;
+
+      try {
+        await navigator.clipboard.writeText(value);
+        toggleNotification({
+          type: 'success',
+          message: 'QR URL copied.',
+        });
+      } catch (error) {
+        toggleNotification({
+          type: 'warning',
+          message: 'Failed to copy QR URL.',
+        });
+      }
+    };
+
+    const buildButton = (value) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Copy';
+      button.dataset.qrCopyButton = 'true';
+      button.style.marginLeft = '12px';
+      button.style.padding = '4px 10px';
+      button.style.border = '1px solid #c0c0cf';
+      button.style.borderRadius = '6px';
+      button.style.background = '#f6f6f9';
+      button.style.color = '#4945ff';
+      button.style.cursor = 'pointer';
+      button.style.fontSize = '12px';
+      button.style.fontWeight = '600';
+      button.style.flexShrink = '0';
+      button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void copyText(value);
+      });
+      return button;
+    };
+
+    const enhanceQrCells = () => {
+      if (isDisposed) return;
+
+      const tables = Array.from(document.querySelectorAll('table'));
+      tables.forEach((table) => {
+        const headerCells = Array.from(table.querySelectorAll('thead th'));
+        const qrHeaderIndex = headerCells.findIndex((cell) =>
+          String(cell.textContent || '').trim().toUpperCase() === 'QR URL'
+        );
+
+        if (qrHeaderIndex === -1) {
+          return;
+        }
+
+        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        rows.forEach((row) => {
+          const cells = Array.from(row.querySelectorAll('td'));
+          const qrCell = cells[qrHeaderIndex];
+          if (!qrCell || qrCell.querySelector('[data-qr-copy-button="true"]')) {
+            return;
+          }
+
+          const urlText = String(qrCell.textContent || '').trim();
+          if (!urlText || urlText === '-') {
+            return;
+          }
+
+          qrCell.style.whiteSpace = 'nowrap';
+          const wrapper = document.createElement('div');
+          wrapper.style.display = 'flex';
+          wrapper.style.alignItems = 'center';
+          wrapper.style.justifyContent = 'space-between';
+          wrapper.style.gap = '8px';
+          wrapper.style.width = '100%';
+
+          const text = document.createElement('span');
+          text.textContent = urlText;
+          text.style.overflow = 'hidden';
+          text.style.textOverflow = 'ellipsis';
+          text.style.whiteSpace = 'nowrap';
+          text.style.display = 'block';
+          text.style.flex = '1';
+
+          wrapper.appendChild(text);
+          wrapper.appendChild(buildButton(urlText));
+
+          qrCell.textContent = '';
+          qrCell.appendChild(wrapper);
+        });
+      });
+    };
+
+    const start = () => {
+      enhanceQrCells();
+      observer = new MutationObserver(() => {
+        enhanceQrCells();
+      });
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+    };
+
+    const timer = window.setTimeout(start, 0);
+
+    return () => {
+      isDisposed = true;
+      window.clearTimeout(timer);
+      observer?.disconnect();
+    };
+  }, [slug, toggleNotification]);
+
+  return null;
+};
+
 const TenantAdminPanel = () => {
   const { slug, initialData, modifiedData } = useCMEditViewDataManager();
   useTenantAdminFormEnhancements({ slug });
@@ -1230,6 +1358,11 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('listView', 'actions', {
     name: 'default-tenant-list-sort',
     Component: DefaultTenantListSort,
+  });
+
+  app.injectContentManagerComponent('listView', 'actions', {
+    name: 'tenant-admin-qr-copy-buttons',
+    Component: TenantAdminQrListCopyButtons,
   });
 };
 
