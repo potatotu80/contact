@@ -790,6 +790,8 @@ const TenantAdminCreateTenantSelector = () => {
   const [portalNode, setPortalNode] = useState(null);
   const [savePortalNode, setSavePortalNode] = useState(null);
   const [pendingTenantId, setPendingTenantId] = useState('');
+  const selectedTenantIdsRef = useRef([]);
+  const modifiedDataRef = useRef(modifiedData);
   const isCreatePage = slug === TENANT_ADMIN_UID && !initialData?.id;
   const derivedSelectedTenantIds = useMemo(
     () => resolveTenantIdsFromValue(modifiedData?.tenant),
@@ -800,6 +802,14 @@ const TenantAdminCreateTenantSelector = () => {
   useEffect(() => {
     setSelectedTenantIds(derivedSelectedTenantIds);
   }, [derivedSelectedTenantIds]);
+
+  useEffect(() => {
+    selectedTenantIdsRef.current = selectedTenantIds;
+  }, [selectedTenantIds]);
+
+  useEffect(() => {
+    modifiedDataRef.current = modifiedData;
+  }, [modifiedData]);
 
   useEffect(() => {
     if (!isCreatePage) {
@@ -944,6 +954,72 @@ const TenantAdminCreateTenantSelector = () => {
       isMounted = false;
     };
   }, [get, isCreatePage, toggleNotification]);
+
+  useEffect(() => {
+    if (!isCreatePage) {
+      return undefined;
+    }
+
+    const originalOpen = window.XMLHttpRequest.prototype.open;
+    const originalSend = window.XMLHttpRequest.prototype.send;
+
+    window.XMLHttpRequest.prototype.open = function patchedOpen(method, url, ...args) {
+      this.__tenantAdminMethod = String(method || '').toUpperCase();
+      this.__tenantAdminUrl = String(url || '');
+      return originalOpen.call(this, method, url, ...args);
+    };
+
+    window.XMLHttpRequest.prototype.send = function patchedSend(body) {
+      const method = this.__tenantAdminMethod;
+      const url = this.__tenantAdminUrl || '';
+      const isTenantAdminCreate =
+        method === 'POST' &&
+        url.includes('/content-manager/collection-types/api::tenant-admin.tenant-admin');
+
+      if (isTenantAdminCreate && typeof body === 'string') {
+        try {
+          const parsed = JSON.parse(body);
+          const sourceData =
+            parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
+              ? parsed.data
+              : parsed;
+          const nextSelectedTenantIds = selectedTenantIdsRef.current || [];
+
+          if (nextSelectedTenantIds.length > 0 && sourceData && typeof sourceData === 'object') {
+            const nextData = {
+              ...sourceData,
+              ...modifiedDataRef.current,
+              tenant: {
+                connect: nextSelectedTenantIds.map((id) => ({ id })),
+              },
+            };
+
+            delete nextData.createdAt;
+            delete nextData.createdBy;
+            delete nextData.updatedAt;
+            delete nextData.updatedBy;
+            delete nextData.id;
+
+            const nextPayload =
+              parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
+                ? { ...parsed, data: nextData }
+                : nextData;
+
+            return originalSend.call(this, JSON.stringify(nextPayload));
+          }
+        } catch (error) {
+          // Let the original request continue unchanged if parsing fails.
+        }
+      }
+
+      return originalSend.call(this, body);
+    };
+
+    return () => {
+      window.XMLHttpRequest.prototype.open = originalOpen;
+      window.XMLHttpRequest.prototype.send = originalSend;
+    };
+  }, [isCreatePage]);
 
   const submitCreate = async () => {
     if (isSubmitting) {
