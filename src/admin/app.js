@@ -905,17 +905,23 @@ const TenantAdminCreateTenantSelector = () => {
 
       tenantNameContainer = findFieldContainer('tenant_name') || findFieldContainerByLabel(['Tenant Name']);
       if (tenantNameContainer?.parentElement) {
+        const tenantNameRow = tenantNameContainer.parentElement;
+        tenantNameRow.style.position = 'relative';
+        tenantNameRow.style.paddingRight = '220px';
+
         if (!actionHostNode) {
           actionHostNode = document.createElement('div');
           actionHostNode.dataset.tenantAdminBulkCreateActionHost = 'true';
+          actionHostNode.style.position = 'absolute';
+          actionHostNode.style.right = '0';
+          actionHostNode.style.bottom = '0';
           actionHostNode.style.display = 'flex';
           actionHostNode.style.justifyContent = 'flex-end';
-          actionHostNode.style.alignItems = 'flex-end';
-          actionHostNode.style.width = '100%';
+          actionHostNode.style.alignItems = 'center';
         }
 
         if (!actionHostNode.parentElement) {
-          tenantNameContainer.parentElement.insertBefore(actionHostNode, tenantNameContainer.nextSibling);
+          tenantNameRow.appendChild(actionHostNode);
         }
 
         setActionMountNode(actionHostNode);
