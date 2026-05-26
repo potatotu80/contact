@@ -788,11 +788,10 @@ const buildScopedTenantAdminListResponse = async ({ strapi, adminUserId, tenantI
   const page = Math.max(1, Number(requestQuery?.page) || 1);
   const pageSize = Math.max(1, Math.min(100, Number(requestQuery?.pageSize) || 10));
   const start = (page - 1) * pageSize;
-  const sort = requestQuery?.sort || ['id:asc'];
+  const sort = String(requestQuery?.sort || 'id:asc').toLowerCase();
   const [results, total] = await Promise.all([
     strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
       filters: mergedFilters,
-      fields: Object.keys(strapi.getModel(APP_TENANT_ADMIN_UID)?.attributes || {}),
       sort,
       start,
       limit: pageSize,
@@ -833,7 +832,6 @@ const findScopedTenantAdminRecord = async ({ strapi, adminUserId, tenantIds, ent
         },
       },
     },
-    fields: Object.keys(strapi.getModel(APP_TENANT_ADMIN_UID)?.attributes || {}),
     populate: {
       tenant: {
         fields: ['id', 'name', 'slug'],
