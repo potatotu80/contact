@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Box, Button, Flex, MultiSelect, MultiSelectOption, Typography } from '@strapi/design-system';
+import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { ExternalLink } from '@strapi/icons';
 import { useCMEditViewDataManager, useFetchClient, useNotification } from '@strapi/helper-plugin';
 import { useRouteMatch } from 'react-router-dom';
@@ -779,17 +779,24 @@ const useTenantAdminFormEnhancements = ({ slug }) => {
 };
 
 const TenantAdminCreateTenantSelector = () => {
-  const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
-  const { get } = useFetchClient();
+  const { slug, initialData, modifiedData } = useCMEditViewDataManager();
+  const { get, post } = useFetchClient();
   const toggleNotification = useNotification();
   const [options, setOptions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [portalNode, setPortalNode] = useState(null);
+  const [pendingTenantId, setPendingTenantId] = useState('');
   const isCreatePage = slug === TENANT_ADMIN_UID && !initialData?.id;
-  const selectedTenantIds = useMemo(
+  const derivedSelectedTenantIds = useMemo(
     () => resolveTenantIdsFromValue(modifiedData?.tenant),
     [modifiedData?.tenant]
   );
+  const [selectedTenantIds, setSelectedTenantIds] = useState(derivedSelectedTenantIds);
+
+  useEffect(() => {
+    setSelectedTenantIds(derivedSelectedTenantIds);
+  }, [derivedSelectedTenantIds]);
 
   useEffect(() => {
     if (!isCreatePage) {
@@ -821,6 +828,7 @@ const TenantAdminCreateTenantSelector = () => {
         host = document.createElement('div');
         host.dataset.tenantAdminMultiSelect = 'true';
         host.style.marginTop = '8px';
+        host.style.width = '100%';
         container.appendChild(host);
       }
 
@@ -902,50 +910,274 @@ const TenantAdminCreateTenantSelector = () => {
     };
   }, [get, isCreatePage, toggleNotification]);
 
+  useEffect(() => {
+    if (!isCreatePage) {
+      return undefined;
+    }
+
+    let isDisposed = false;
+    let intervalId = null;
+    let cleanup = null;
+
+    const attachSubmitHandler = () => {
+      const form = document.querySelector('form');
+      if (!form) {
+        return;
+      }
+
+      const submitHandler = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+
+        if (isSubmitting) {
+          return;
+        }
+
+        const adminEmail = String(modifiedData?.admin_email || '').trim();
+        if (!adminEmail) {
+          toggleNotification({
+            type: 'warning',
+            message: 'Admin Email is required.',
+          });
+          return;
+        }
+
+        if (!selectedTenantIds.length) {
+          toggleNotification({
+            type: 'warning',
+            message: 'Please select at least one tenant.',
+          });
+          return;
+        }
+
+        const payload = {
+          ...modifiedData,
+          qr_token: undefined,
+          qr_code_url: undefined,
+          tenant: {
+            connect: selectedTenantIds.map((id) => ({ id })),
+          },
+        };
+
+        delete payload.createdAt;
+        delete payload.createdBy;
+        delete payload.updatedAt;
+        delete payload.updatedBy;
+        delete payload.id;
+
+        try {
+          setIsSubmitting(true);
+          await post(`/content-manager/collection-types/${TENANT_ADMIN_UID}`, {
+            data: payload,
+          });
+          toggleNotification({
+            type: 'success',
+            message: selectedTenantIds.length > 1
+              ? 'Tenant Admin records created.'
+              : 'Tenant Admin record created.',
+          });
+          window.location.assign(
+            buildCollectionTypeListUrl(TENANT_ADMIN_UID, {
+              page: '1',
+              pageSize: '10',
+              sort: 'id:ASC',
+            })
+          );
+        } catch (error) {
+          const message =
+            error?.response?.data?.error?.message ||
+            error?.message ||
+            'Failed to create Tenant Admin records.';
+          toggleNotification({
+            type: 'warning',
+            message,
+          });
+        } finally {
+          if (!isDisposed) {
+            setIsSubmitting(false);
+          }
+        }
+      };
+
+      const clickHandler = (event) => {
+        const button = event.target?.closest?.('button');
+        if (!button) return;
+
+        const buttonText = button.textContent?.trim()?.toLowerCase?.() || '';
+        if (buttonText !== 'save') return;
+
+        submitHandler(event);
+      };
+
+      form.addEventListener('submit', submitHandler, true);
+      document.addEventListener('click', clickHandler, true);
+      cleanup = () => {
+        form.removeEventListener('submit', submitHandler, true);
+        document.removeEventListener('click', clickHandler, true);
+      };
+
+      if (intervalId) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    intervalId = window.setInterval(attachSubmitHandler, 400);
+    attachSubmitHandler();
+
+    return () => {
+      isDisposed = true;
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+      cleanup?.();
+    };
+  }, [isCreatePage, isSubmitting, modifiedData, post, selectedTenantIds, toggleNotification]);
+
   if (!isCreatePage || !portalNode) {
     return null;
   }
 
-  return createPortal(
-    <MultiSelect
-      label="Linked Tenants"
-      placeholder="Select one or more tenants"
-      withTags
-      disabled={isLoading}
-      value={selectedTenantIds.map(String)}
-      onChange={(nextValues) => {
-        const nextIds = nextValues
-          .map((value) => Number(value))
-          .filter((value) => Number.isInteger(value) && value > 0);
+  const selectedOptions = selectedTenantIds
+    .map((id) => options.find((tenant) => tenant.id === id))
+    .filter(Boolean);
 
-        onChange({
-          target: {
-            name: 'tenant',
-            value: {
-              connect: nextIds.map((id) => ({ id })),
-            },
-            type: 'relation',
-          },
-        });
-      }}
-      onClear={() => {
-        onChange({
-          target: {
-            name: 'tenant',
-            value: {
-              connect: [],
-            },
-            type: 'relation',
-          },
-        });
+  const availableOptions = options.filter((tenant) => !selectedTenantIds.includes(tenant.id));
+
+  const addSelectedTenant = () => {
+    const nextId = Number(pendingTenantId);
+    if (!Number.isInteger(nextId) || nextId <= 0 || selectedTenantIds.includes(nextId)) {
+      return;
+    }
+
+    setSelectedTenantIds((current) => [...current, nextId]);
+    setPendingTenantId('');
+  };
+
+  const removeTenant = (tenantId) => {
+    setSelectedTenantIds((current) => current.filter((id) => id !== tenantId));
+  };
+
+  return createPortal(
+    <Box
+      style={{
+        width: '100%',
+        paddingTop: '8px',
       }}
     >
-      {options.map((tenant) => (
-        <MultiSelectOption key={tenant.id} value={tenant.id}>
-          {tenant.label}
-        </MultiSelectOption>
-      ))}
-    </MultiSelect>,
+      <Flex direction="column" gap={3} alignItems="stretch">
+        <Flex gap={2} alignItems="flex-end">
+          <Box style={{ flex: 1 }}>
+            <Typography
+              variant="omega"
+              textColor="neutral700"
+              style={{ display: 'block', marginBottom: '6px' }}
+            >
+              Add Tenant
+            </Typography>
+            <select
+              value={pendingTenantId}
+              onChange={(event) => setPendingTenantId(event.target.value)}
+              disabled={isLoading || isSubmitting || !availableOptions.length}
+              style={{
+                width: '100%',
+                minHeight: '40px',
+                border: '1px solid #dcdce4',
+                borderRadius: '4px',
+                padding: '0 12px',
+                background: '#ffffff',
+                color: '#32324d',
+              }}
+            >
+              <option value="">
+                {isLoading
+                  ? 'Loading tenants...'
+                  : availableOptions.length
+                    ? 'Select a tenant to add'
+                    : 'All tenants selected'}
+              </option>
+              {availableOptions.map((tenant) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.label}
+                </option>
+              ))}
+            </select>
+          </Box>
+          <Button
+            variant="secondary"
+            size="S"
+            disabled={!pendingTenantId || isSubmitting}
+            onClick={addSelectedTenant}
+          >
+            Add tenant
+          </Button>
+        </Flex>
+
+        <Box
+          background="neutral100"
+          borderColor="neutral200"
+          hasRadius
+          padding={3}
+        >
+          {selectedOptions.length ? (
+            <Flex gap={2} wrap="wrap">
+              {selectedOptions.map((tenant) => (
+                <Box
+                  key={tenant.id}
+                  background="primary100"
+                  borderColor="primary200"
+                  hasRadius
+                  paddingLeft={3}
+                  paddingRight={2}
+                  paddingTop={2}
+                  paddingBottom={2}
+                >
+                  <Flex gap={2} alignItems="center">
+                    <Typography variant="pi" textColor="primary700">
+                      {tenant.label}
+                    </Typography>
+                    <button
+                      type="button"
+                      onClick={() => removeTenant(tenant.id)}
+                      disabled={isSubmitting}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#4945ff',
+                        cursor: isSubmitting ? 'default' : 'pointer',
+                        fontSize: '16px',
+                        lineHeight: 1,
+                        padding: 0,
+                      }}
+                      aria-label={`Remove ${tenant.label}`}
+                    >
+                      ×
+                    </button>
+                  </Flex>
+                </Box>
+              ))}
+            </Flex>
+          ) : (
+            <Typography variant="omega" textColor="neutral600">
+              No tenants selected yet.
+            </Typography>
+          )}
+        </Box>
+      </Flex>
+
+      <Typography
+        variant="omega"
+        textColor="neutral600"
+        style={{
+          display: 'block',
+          marginTop: '8px',
+          lineHeight: 1.5,
+        }}
+      >
+        Saving will create one Tenant Admin record per selected tenant. Existing admin email is required.
+      </Typography>
+    </Box>,
     portalNode
   );
 };
