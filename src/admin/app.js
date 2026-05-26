@@ -918,7 +918,14 @@ const TenantAdminCreateTenantSelector = () => {
     };
   }, [isCreatePage]);
 
-  const submitCreate = async () => {
+  const submitCreate = async (event) => {
+    if (event?.preventDefault) {
+      event.preventDefault();
+    }
+    if (event?.stopPropagation) {
+      event.stopPropagation();
+    }
+
     if (isSubmitting) {
       return;
     }
@@ -985,7 +992,14 @@ const TenantAdminCreateTenantSelector = () => {
 
   const availableOptions = options.filter((tenant) => !selectedTenantIds.includes(tenant.id));
 
-  const addSelectedTenant = () => {
+  const addSelectedTenant = (event) => {
+    if (event?.preventDefault) {
+      event.preventDefault();
+    }
+    if (event?.stopPropagation) {
+      event.stopPropagation();
+    }
+
     const nextId = Number(pendingTenantId);
     if (!Number.isInteger(nextId) || nextId <= 0 || selectedTenantIds.includes(nextId)) {
       return;
@@ -1114,7 +1128,12 @@ const TenantAdminCreateTenantSelector = () => {
             </Typography>
           )}
         </Box>
-        <Button type="button" onClick={submitCreate} loading={isSubmitting} disabled={isLoading}>
+        <Button
+          type="button"
+          onClick={submitCreate}
+          loading={isSubmitting}
+          disabled={isLoading}
+        >
           Create tenant admin records
         </Button>
       </Flex>
