@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, Flex, Typography } from '@strapi/design-system';
+import { createPortal } from 'react-dom';
+import { Box, Button, Flex, MultiSelect, MultiSelectOption, Typography } from '@strapi/design-system';
 import { ExternalLink } from '@strapi/icons';
 import { useCMEditViewDataManager, useFetchClient, useNotification } from '@strapi/helper-plugin';
 import { useRouteMatch } from 'react-router-dom';
@@ -73,6 +74,22 @@ const extractTenantRecord = (value) => {
     return null;
   }
   return value;
+};
+
+const resolveTenantIdsFromValue = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => Number(entry?.id || entry))
+      .filter((entry) => Number.isInteger(entry) && entry > 0);
+  }
+  if (Array.isArray(value?.connect)) {
+    return value.connect
+      .map((entry) => Number(entry?.id || entry))
+      .filter((entry) => Number.isInteger(entry) && entry > 0);
+  }
+  const directId = Number(value?.id || value);
+  return Number.isInteger(directId) && directId > 0 ? [directId] : [];
 };
 
 const formatCallDuration = (seconds) => {
@@ -761,6 +778,178 @@ const useTenantAdminFormEnhancements = ({ slug }) => {
   }, [slug]);
 };
 
+const TenantAdminCreateTenantSelector = () => {
+  const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
+  const { get } = useFetchClient();
+  const toggleNotification = useNotification();
+  const [options, setOptions] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [portalNode, setPortalNode] = useState(null);
+  const isCreatePage = slug === TENANT_ADMIN_UID && !initialData?.id;
+  const selectedTenantIds = useMemo(
+    () => resolveTenantIdsFromValue(modifiedData?.tenant),
+    [modifiedData?.tenant]
+  );
+
+  useEffect(() => {
+    if (!isCreatePage) {
+      setPortalNode(null);
+      return undefined;
+    }
+
+    let isDisposed = false;
+    let cleanup = null;
+    let intervalId = null;
+
+    const attachPortal = () => {
+      const container = findFieldContainer('tenant');
+      if (!container) {
+        return;
+      }
+
+      const children = Array.from(container.children);
+      const hiddenChildren = children.slice(1);
+      hiddenChildren.forEach((child) => {
+        if (!child.dataset.tenantAdminOriginalDisplay) {
+          child.dataset.tenantAdminOriginalDisplay = child.style.display || '';
+        }
+        child.style.display = 'none';
+      });
+
+      let host = container.querySelector('[data-tenant-admin-multi-select="true"]');
+      if (!host) {
+        host = document.createElement('div');
+        host.dataset.tenantAdminMultiSelect = 'true';
+        host.style.marginTop = '8px';
+        container.appendChild(host);
+      }
+
+      if (!isDisposed) {
+        setPortalNode(host);
+      }
+
+      cleanup = () => {
+        hiddenChildren.forEach((child) => {
+          if (Object.prototype.hasOwnProperty.call(child.dataset, 'tenantAdminOriginalDisplay')) {
+            child.style.display = child.dataset.tenantAdminOriginalDisplay || '';
+            delete child.dataset.tenantAdminOriginalDisplay;
+          }
+        });
+        host.remove();
+      };
+
+      if (intervalId) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    intervalId = window.setInterval(attachPortal, 400);
+    attachPortal();
+
+    return () => {
+      isDisposed = true;
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
+      cleanup?.();
+    };
+  }, [isCreatePage]);
+
+  useEffect(() => {
+    if (!isCreatePage) {
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    const loadTenants = async () => {
+      try {
+        setIsLoading(true);
+        const response = await get(`/content-manager/collection-types/${TENANT_UID}`, {
+          params: {
+            page: 1,
+            pageSize: 200,
+            sort: 'name:ASC',
+          },
+        });
+        if (!isMounted) return;
+
+        const results = response?.data?.results || response?.data || [];
+        setOptions(
+          results.map((tenant) => ({
+            id: tenant.id,
+            label: tenant.name || tenant.slug || String(tenant.id),
+          }))
+        );
+      } catch (error) {
+        if (!isMounted) return;
+        toggleNotification({
+          type: 'warning',
+          message: 'Failed to load tenants for bulk Tenant Admin creation.',
+        });
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadTenants();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [get, isCreatePage, toggleNotification]);
+
+  if (!isCreatePage || !portalNode) {
+    return null;
+  }
+
+  return createPortal(
+    <MultiSelect
+      label="Linked Tenants"
+      placeholder="Select one or more tenants"
+      withTags
+      disabled={isLoading}
+      value={selectedTenantIds.map(String)}
+      onChange={(nextValues) => {
+        const nextIds = nextValues
+          .map((value) => Number(value))
+          .filter((value) => Number.isInteger(value) && value > 0);
+
+        onChange({
+          target: {
+            name: 'tenant',
+            value: {
+              connect: nextIds.map((id) => ({ id })),
+            },
+            type: 'relation',
+          },
+        });
+      }}
+      onClear={() => {
+        onChange({
+          target: {
+            name: 'tenant',
+            value: {
+              connect: [],
+            },
+            type: 'relation',
+          },
+        });
+      }}
+    >
+      {options.map((tenant) => (
+        <MultiSelectOption key={tenant.id} value={tenant.id}>
+          {tenant.label}
+        </MultiSelectOption>
+      ))}
+    </MultiSelect>,
+    portalNode
+  );
+};
+
 const ReadOnlyField = ({ label, value, monospace = false }) => (
   <Box
     style={{
@@ -1255,25 +1444,30 @@ const TenantAdminPanel = () => {
 
   if (slug !== TENANT_ADMIN_UID) return null;
 
-  if (!initialData?.id) {
-    return (
-      <Box
-        background="neutral0"
-        borderColor="neutral200"
-        hasRadius
-        padding={4}
-        shadow="tableShadow"
-      >
-        <Flex direction="column" gap={3}>
-          <Typography variant="pi" textColor="neutral600">
-            Tenant Admin QR
-          </Typography>
+  const isCreatePage = !initialData?.id;
 
-          <Typography variant="omega" textColor="neutral500">
-            You can add multiple linked tenants here. Saving will create one Tenant Admin record per tenant, each with its own QR URL and QR preview.
-          </Typography>
-        </Flex>
-      </Box>
+  if (isCreatePage) {
+    return (
+      <>
+        <TenantAdminCreateTenantSelector />
+        <Box
+          background="neutral0"
+          borderColor="neutral200"
+          hasRadius
+          padding={4}
+          shadow="tableShadow"
+        >
+          <Flex direction="column" gap={3}>
+            <Typography variant="pi" textColor="neutral600">
+              Tenant Admin QR
+            </Typography>
+
+            <Typography variant="omega" textColor="neutral500">
+              You can add multiple linked tenants here. Saving will create one Tenant Admin record per tenant, each with its own QR URL and QR preview.
+            </Typography>
+          </Flex>
+        </Box>
+      </>
     );
   }
 
