@@ -764,14 +764,16 @@ const useTenantAdminFormEnhancements = ({ slug }) => {
         tenantNameInput.placeholder = 'Enter the customer-facing tenant name for this admin QR';
       }
 
-      const tenantContainer = findFieldContainer('tenant');
-      if (tenantContainer && !tenantContainer.querySelector('[data-tenant-admin-tenant-hint="true"]')) {
-        const hint = document.createElement('div');
-        hint.dataset.tenantAdminTenantHint = 'true';
-        hint.textContent = isCreatePage
-          ? ''
-          : 'This edit page stays single-tenant. Delete the record if you want to remove this tenant assignment.';
-        if (hint.textContent) {
+      const tenantContainer =
+        findFieldContainer('tenant') ||
+        findFieldContainerByLabel(['Linked Tenant', 'Tenant']);
+      if (tenantContainer) {
+        if (isCreatePage) {
+          tenantContainer.style.display = 'none';
+        } else if (!tenantContainer.querySelector('[data-tenant-admin-tenant-hint="true"]')) {
+          const hint = document.createElement('div');
+          hint.dataset.tenantAdminTenantHint = 'true';
+          hint.textContent = 'This edit page stays single-tenant. Delete the record if you want to remove this tenant assignment.';
           hint.style.marginTop = '6px';
           hint.style.fontSize = '12px';
           hint.style.color = '#666687';
@@ -1154,6 +1156,8 @@ const TenantAdminCreateTenantSelector = () => {
     </Box>,
     portalNode
   );
+
+  return selectorPortal;
 };
 
 const ReadOnlyField = ({ label, value, monospace = false }) => (
