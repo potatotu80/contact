@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Box, Button, Flex, Typography } from '@strapi/design-system';
 import { ExternalLink } from '@strapi/icons';
 import { useCMEditViewDataManager, useFetchClient, useNotification } from '@strapi/helper-plugin';
@@ -808,91 +807,9 @@ const TenantAdminCreateTenantSelector = () => {
   const [options, setOptions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [portalNode, setPortalNode] = useState(null);
   const [pendingTenantId, setPendingTenantId] = useState('');
   const isCreatePage = slug === TENANT_ADMIN_UID && !initialData?.id;
-  const derivedSelectedTenantIds = useMemo(
-    () => resolveTenantIdsFromValue(modifiedData?.tenant),
-    [modifiedData?.tenant]
-  );
-  const [selectedTenantIds, setSelectedTenantIds] = useState(derivedSelectedTenantIds);
-
-  useEffect(() => {
-    setSelectedTenantIds(derivedSelectedTenantIds);
-  }, [derivedSelectedTenantIds]);
-
-  useEffect(() => {
-    if (!isCreatePage) {
-      setPortalNode(null);
-      return undefined;
-    }
-
-    let isDisposed = false;
-    let cleanupTenantPortal = null;
-    let intervalId = null;
-
-    const attachPortals = () => {
-      const container =
-        findFieldContainer('tenant') ||
-        findFieldContainerByLabel(['Linked Tenant', 'Tenant']);
-      if (container) {
-        const children = Array.from(container.children);
-        const hiddenChildren = children.slice(1);
-        hiddenChildren.forEach((child) => {
-          if (!child.dataset.tenantAdminOriginalDisplay) {
-            child.dataset.tenantAdminOriginalDisplay = child.style.display || '';
-          }
-          child.style.display = 'none';
-        });
-
-        let host = container.querySelector('[data-tenant-admin-multi-select="true"]');
-        if (!host) {
-          host = document.createElement('div');
-          host.dataset.tenantAdminMultiSelect = 'true';
-          host.style.marginTop = '8px';
-          host.style.width = '100%';
-          container.appendChild(host);
-        }
-
-        if (!isDisposed) {
-          setPortalNode(host);
-        }
-
-        cleanupTenantPortal = () => {
-          hiddenChildren.forEach((child) => {
-            if (Object.prototype.hasOwnProperty.call(child.dataset, 'tenantAdminOriginalDisplay')) {
-              child.style.display = child.dataset.tenantAdminOriginalDisplay || '';
-              delete child.dataset.tenantAdminOriginalDisplay;
-            }
-          });
-          host.remove();
-        };
-      }
-
-      Array.from(document.querySelectorAll('button')).forEach((button) => {
-        const buttonText = button.textContent?.trim()?.toLowerCase?.() || '';
-        if (buttonText === 'save') {
-          button.style.display = 'none';
-        }
-      });
-
-      if (intervalId) {
-        window.clearInterval(intervalId);
-        intervalId = null;
-      }
-    };
-
-    intervalId = window.setInterval(attachPortals, 400);
-    attachPortals();
-
-    return () => {
-      isDisposed = true;
-      if (intervalId) {
-        window.clearInterval(intervalId);
-      }
-      cleanupTenantPortal?.();
-    };
-  }, [isCreatePage]);
+  const [selectedTenantIds, setSelectedTenantIds] = useState([]);
 
   useEffect(() => {
     if (!isCreatePage) {
@@ -962,22 +879,14 @@ const TenantAdminCreateTenantSelector = () => {
       return;
     }
 
-    const payload = {
-      ...modifiedData,
-        tenantIds: selectedTenantIds,
-        qr_token: undefined,
-        qr_code_url: undefined,
-    };
-
-    delete payload.createdAt;
-    delete payload.createdBy;
-    delete payload.updatedAt;
-    delete payload.updatedBy;
-    delete payload.id;
-
     try {
       setIsSubmitting(true);
-      await post(`/tenant-admin/bulk-create`, payload);
+      await post('/tenant-admin/bulk-create', {
+        admin_email: adminEmail,
+        role: modifiedData?.role || 'tenant_admin',
+        tenant_name: String(modifiedData?.tenant_name || '').trim() || null,
+        tenantIds: selectedTenantIds,
+      });
       toggleNotification({
         type: 'success',
         message: selectedTenantIds.length > 1
@@ -1005,7 +914,7 @@ const TenantAdminCreateTenantSelector = () => {
     }
   };
 
-  if (!isCreatePage || !portalNode) {
+  if (!isCreatePage) {
     return null;
   }
 
@@ -1029,15 +938,24 @@ const TenantAdminCreateTenantSelector = () => {
     setSelectedTenantIds((current) => current.filter((id) => id !== tenantId));
   };
 
-  const selectorPortal = createPortal(
+  return (
     <Box
-      style={{
-        width: '100%',
-        paddingTop: '8px',
-      }}
+      background="neutral0"
+      borderColor="neutral200"
+      hasRadius
+      padding={4}
+      shadow="tableShadow"
     >
       <Flex direction="column" gap={3} alignItems="stretch">
-      <Flex gap={2} alignItems="flex-end">
+        <Typography variant="pi" textColor="neutral600">
+          Tenant Admin QR
+        </Typography>
+
+        <Typography variant="omega" textColor="neutral500">
+          One QR record will be created per selected tenant.
+        </Typography>
+
+        <Flex gap={2} alignItems="flex-end">
           <Box style={{ flex: 1 }}>
             <Typography
               variant="omega"
@@ -1135,29 +1053,12 @@ const TenantAdminCreateTenantSelector = () => {
             </Typography>
           )}
         </Box>
-        <Typography
-          variant="omega"
-          textColor="neutral600"
-          style={{
-            display: 'block',
-            marginTop: '8px',
-            lineHeight: 1.5,
-          }}
-        >
-          Creates one Tenant Admin record per selected tenant.
-        </Typography>
-
-        <Flex justifyContent="flex-end">
-          <Button type="button" onClick={submitCreate} loading={isSubmitting} disabled={isLoading}>
-            Create tenant admin records
-          </Button>
-        </Flex>
+        <Button type="button" onClick={submitCreate} loading={isSubmitting} disabled={isLoading}>
+          Create tenant admin records
+        </Button>
       </Flex>
-    </Box>,
-    portalNode
+    </Box>
   );
-
-  return selectorPortal;
 };
 
 const ReadOnlyField = ({ label, value, monospace = false }) => (
