@@ -1128,14 +1128,16 @@ const TenantAdminCreateTenantSelector = () => {
             </Typography>
           )}
         </Box>
-        <Button
-          type="button"
-          onClick={submitCreate}
-          loading={isSubmitting}
-          disabled={isLoading}
-        >
-          Create tenant admin records
-        </Button>
+        <Flex justifyContent="flex-end">
+          <Button
+            type="button"
+            onClick={submitCreate}
+            loading={isSubmitting}
+            disabled={isLoading}
+          >
+            Create tenant admin records
+          </Button>
+        </Flex>
       </Flex>
     </Box>
   );
