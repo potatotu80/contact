@@ -905,7 +905,7 @@ const TenantAdminCreateTenantSelector = () => {
 
       tenantNameContainer = findFieldContainer('tenant_name') || findFieldContainerByLabel(['Tenant Name']);
       if (tenantNameContainer?.parentElement) {
-        const tenantNameRow = tenantNameContainer.parentElement;
+        const tenantNameRow = tenantNameContainer.parentElement.parentElement || tenantNameContainer.parentElement;
         tenantNameRow.style.position = 'relative';
         tenantNameRow.style.paddingRight = '220px';
 
@@ -913,7 +913,7 @@ const TenantAdminCreateTenantSelector = () => {
           actionHostNode = document.createElement('div');
           actionHostNode.dataset.tenantAdminBulkCreateActionHost = 'true';
           actionHostNode.style.position = 'absolute';
-          actionHostNode.style.right = '0';
+          actionHostNode.style.right = '16px';
           actionHostNode.style.bottom = '0';
           actionHostNode.style.display = 'flex';
           actionHostNode.style.justifyContent = 'flex-end';
