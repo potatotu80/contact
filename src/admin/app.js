@@ -750,12 +750,14 @@ const useTenantAdminFormEnhancements = ({ slug }) => {
         const hint = document.createElement('div');
         hint.dataset.tenantAdminTenantHint = 'true';
         hint.textContent = isCreatePage
-          ? 'You can add multiple tenants here. Saving will create one Tenant Admin record per tenant.'
+          ? ''
           : 'This edit page stays single-tenant. Delete the record if you want to remove this tenant assignment.';
-        hint.style.marginTop = '6px';
-        hint.style.fontSize = '12px';
-        hint.style.color = '#666687';
-        tenantContainer.appendChild(hint);
+        if (hint.textContent) {
+          hint.style.marginTop = '6px';
+          hint.style.fontSize = '12px';
+          hint.style.color = '#666687';
+          tenantContainer.appendChild(hint);
+        }
       }
 
       if (isCreatePage) {
@@ -925,11 +927,7 @@ const TenantAdminCreateTenantSelector = () => {
         return;
       }
 
-      const submitHandler = async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation?.();
-
+      const submitCreate = async () => {
         if (isSubmitting) {
           return;
         }
@@ -998,6 +996,13 @@ const TenantAdminCreateTenantSelector = () => {
         }
       };
 
+      const submitHandler = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        await submitCreate();
+      };
+
       const clickHandler = (event) => {
         const button = event.target?.closest?.('button');
         if (!button) return;
@@ -1005,14 +1010,36 @@ const TenantAdminCreateTenantSelector = () => {
         const buttonText = button.textContent?.trim()?.toLowerCase?.() || '';
         if (buttonText !== 'save') return;
 
-        submitHandler(event);
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        submitCreate();
       };
+
+      const saveButton = Array.from(document.querySelectorAll('button')).find((button) => {
+        const buttonText = button.textContent?.trim()?.toLowerCase?.() || '';
+        return buttonText === 'save';
+      });
+
+      if (saveButton && !saveButton.dataset.tenantAdminOriginalType) {
+        saveButton.dataset.tenantAdminOriginalType = saveButton.getAttribute('type') || '';
+        saveButton.setAttribute('type', 'button');
+      }
 
       form.addEventListener('submit', submitHandler, true);
       document.addEventListener('click', clickHandler, true);
       cleanup = () => {
         form.removeEventListener('submit', submitHandler, true);
         document.removeEventListener('click', clickHandler, true);
+        if (saveButton && Object.prototype.hasOwnProperty.call(saveButton.dataset, 'tenantAdminOriginalType')) {
+          const originalType = saveButton.dataset.tenantAdminOriginalType;
+          if (originalType) {
+            saveButton.setAttribute('type', originalType);
+          } else {
+            saveButton.removeAttribute('type');
+          }
+          delete saveButton.dataset.tenantAdminOriginalType;
+        }
       };
 
       if (intervalId) {
