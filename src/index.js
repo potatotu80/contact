@@ -1503,6 +1503,9 @@ module.exports = {
       if (ctx.method === 'POST' && slug === APP_TENANT_ADMIN_UID) {
         const data = getRequestData(ctx);
         const tenantIds = resolveTenantRelationIds(data?.tenant);
+        strapi.log.info(
+          `[tenant-admin-create] bodyTenant=${JSON.stringify(data?.tenant || null)} resolvedTenantIds=${JSON.stringify(tenantIds)}`
+        );
         if (tenantIds.length > 1) {
           const createPayload = getRequestData(ctx);
           if (!createPayload || typeof createPayload !== 'object') {
