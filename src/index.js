@@ -22,6 +22,7 @@ const {
   getTenantIdsFilter,
   parsePositiveInt,
 } = require('./utils/tenant-access');
+const TENANT_ADMIN_BULK_SENTINEL = '__tenant_admin_bulk__:';
 
 const buildS3ObjectUrl = (bucket, region, key) => {
   const encodedKey = key
@@ -190,6 +191,29 @@ const resolveTenantRelationIds = (value) => {
   }
 
   return [];
+};
+
+const resolveTenantAdminBulkTenantIds = (data) => {
+  const relationTenantIds = resolveTenantRelationIds(data?.tenant);
+  if (relationTenantIds.length > 0) {
+    return relationTenantIds;
+  }
+
+  const qrCodeUrlValue = String(data?.qr_code_url || '').trim();
+  if (!qrCodeUrlValue.startsWith(TENANT_ADMIN_BULK_SENTINEL)) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(qrCodeUrlValue.slice(TENANT_ADMIN_BULK_SENTINEL.length));
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return [...new Set(parsed.map((entry) => parsePositiveInt(entry)).filter(Boolean))];
+  } catch (error) {
+    return [];
+  }
 };
 
 const stripManagedTenantFields = (ctx, slug) => {
@@ -1502,9 +1526,21 @@ module.exports = {
 
       if (ctx.method === 'POST' && slug === APP_TENANT_ADMIN_UID) {
         const data = getRequestData(ctx);
-        const tenantIds = resolveTenantRelationIds(data?.tenant);
+        const tenantIds = resolveTenantAdminBulkTenantIds(data);
+        const relationTenantIds = resolveTenantRelationIds(data?.tenant);
+
+        if (!relationTenantIds.length && tenantIds.length > 0) {
+          setRequestData(ctx, {
+            ...data,
+            qr_code_url: null,
+            tenant: {
+              connect: tenantIds.map((id) => ({ id })),
+            },
+          });
+        }
+
         strapi.log.info(
-          `[tenant-admin-create] bodyTenant=${JSON.stringify(data?.tenant || null)} resolvedTenantIds=${JSON.stringify(tenantIds)}`
+          `[tenant-admin-create] bodyTenant=${JSON.stringify(data?.tenant || null)} qrCodeUrl=${JSON.stringify(data?.qr_code_url || null)} resolvedTenantIds=${JSON.stringify(tenantIds)}`
         );
         if (tenantIds.length > 1) {
           const createPayload = getRequestData(ctx);
@@ -1520,6 +1556,7 @@ module.exports = {
           for (const tenantId of tenantIds) {
             const nextData = {
               ...createPayload,
+              qr_code_url: null,
               tenant: {
                 connect: [{ id: tenantId }],
               },

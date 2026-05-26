@@ -10,6 +10,7 @@ const APP_USER_UID = 'api::app-user.app-user';
 const CONTACT_UID = 'api::contact.contact';
 const TENANT_UID = 'api::tenant.tenant';
 const TENANT_ADMIN_UID = 'api::tenant-admin.tenant-admin';
+const TENANT_ADMIN_BULK_SENTINEL = '__tenant_admin_bulk__:';
 const S3_BUCKET = process.env.STRAPI_ADMIN_S3_BUCKET || 'yengtesting';
 const S3_REGION = process.env.STRAPI_ADMIN_S3_REGION || 'ap-southeast-1';
 const S3_IMAGES_PREFIX = process.env.STRAPI_ADMIN_S3_IMAGES_PREFIX || 'users';
@@ -91,6 +92,10 @@ const resolveTenantIdsFromValue = (value) => {
   const directId = Number(value?.id || value);
   return Number.isInteger(directId) && directId > 0 ? [directId] : [];
 };
+
+const serializeTenantAdminBulkTenantIds = (tenantIds) => (
+  `${TENANT_ADMIN_BULK_SENTINEL}${JSON.stringify(tenantIds)}`
+);
 
 const formatCallDuration = (seconds) => {
   const safeSeconds = Math.max(0, Number(seconds) || 0);
@@ -781,7 +786,7 @@ const useTenantAdminFormEnhancements = ({ slug }) => {
 };
 
 const TenantAdminCreateTenantSelector = () => {
-  const { slug, initialData, modifiedData } = useCMEditViewDataManager();
+  const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
   const { get, post } = useFetchClient();
   const toggleNotification = useNotification();
   const [options, setOptions] = useState([]);
@@ -810,6 +815,20 @@ const TenantAdminCreateTenantSelector = () => {
   useEffect(() => {
     modifiedDataRef.current = modifiedData;
   }, [modifiedData]);
+
+  useEffect(() => {
+    if (!isCreatePage) {
+      return;
+    }
+
+    onChange({
+      target: {
+        name: 'qr_code_url',
+        value: serializeTenantAdminBulkTenantIds(selectedTenantIds),
+        type: 'string',
+      },
+    });
+  }, [isCreatePage, onChange, selectedTenantIds]);
 
   useEffect(() => {
     if (!isCreatePage) {
