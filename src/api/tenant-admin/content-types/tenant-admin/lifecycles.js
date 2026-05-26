@@ -68,6 +68,53 @@ const findTenantById = async (tenantId) => {
   });
 };
 
+const assertUniqueTenantAdminMapping = async ({
+  adminUserId,
+  tenantId,
+  currentRecordId,
+}) => {
+  if (!adminUserId || !tenantId) {
+    return;
+  }
+
+  const existingMappings = await strapi.entityService.findMany(TENANT_ADMIN_UID, {
+    filters: {
+      admin_user_id: {
+        $eq: adminUserId,
+      },
+      tenant: {
+        id: {
+          $eq: tenantId,
+        },
+      },
+      ...(currentRecordId
+        ? {
+            id: {
+              $ne: currentRecordId,
+            },
+          }
+        : {}),
+    },
+    fields: ['id', 'admin_email'],
+    populate: {
+      tenant: {
+        fields: ['id', 'name', 'slug'],
+      },
+    },
+    limit: 1,
+  });
+
+  const existingMapping = existingMappings[0];
+  if (!existingMapping) {
+    return;
+  }
+
+  const tenantLabel = String(existingMapping.tenant?.name || existingMapping.tenant?.slug || tenantId).trim();
+  throw new ValidationError(
+    `This admin is already assigned to tenant "${tenantLabel}". Create separate Tenant Admin records only for different tenants.`
+  );
+};
+
 const syncAdminSnapshot = async (event) => {
   const data = event.params?.data;
   if (!data) {
@@ -145,6 +192,12 @@ const syncAdminSnapshot = async (event) => {
   if (!tenant) {
     throw new ValidationError('Tenant Admin requires a valid tenant.');
   }
+
+  await assertUniqueTenantAdminMapping({
+    adminUserId: adminUser.id,
+    tenantId,
+    currentRecordId: existingRecordId,
+  });
 
   if (!String(data.tenant_name || '').trim()) {
     data.tenant_name = String(existingTenantAdmin?.tenant_name || tenant.name || '').trim() || null;

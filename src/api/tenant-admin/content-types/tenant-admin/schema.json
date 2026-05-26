@@ -5,7 +5,7 @@
     "singularName": "tenant-admin",
     "pluralName": "tenant-admins",
     "displayName": "Tenant Admin",
-    "description": "Assigns a Strapi admin user to one tenant"
+    "description": "Assigns a Strapi admin user to one tenant; the same admin can manage multiple tenants through separate records"
   },
   "options": {
     "draftAndPublish": false
