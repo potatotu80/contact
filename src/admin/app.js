@@ -1120,7 +1120,7 @@ const TenantAdminCreateTenantSelector = () => {
       }}
     >
       <Flex direction="column" gap={3} alignItems="stretch">
-        <Flex gap={2} alignItems="flex-end">
+      <Flex gap={2} alignItems="flex-end">
           <Box style={{ flex: 1 }}>
             <Typography
               variant="omega"
@@ -1160,6 +1160,7 @@ const TenantAdminCreateTenantSelector = () => {
           <Button
             variant="secondary"
             size="S"
+            type="button"
             disabled={!pendingTenantId || isSubmitting}
             onClick={addSelectedTenant}
           >
@@ -1236,7 +1237,7 @@ const TenantAdminCreateTenantSelector = () => {
 
   const savePortal = savePortalNode
     ? createPortal(
-        <Button onClick={submitCreate} loading={isSubmitting} disabled={isLoading}>
+        <Button type="button" onClick={submitCreate} loading={isSubmitting} disabled={isLoading}>
           Save
         </Button>,
         savePortalNode
