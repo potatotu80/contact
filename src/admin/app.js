@@ -1234,7 +1234,7 @@ const TenantAdminPanel = () => {
           </Typography>
 
           <Typography variant="omega" textColor="neutral500">
-            Save this tenant admin first to generate a unique QR URL and QR preview.
+            You can add multiple linked tenants here. Saving will create one Tenant Admin record per tenant, each with its own QR URL and QR preview.
           </Typography>
         </Flex>
       </Box>

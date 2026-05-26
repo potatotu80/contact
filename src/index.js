@@ -166,6 +166,32 @@ const setRequestData = (ctx, nextData) => {
   ctx.request.body = nextData;
 };
 
+const resolveTenantRelationIds = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  if (typeof value === 'number' || typeof value === 'string') {
+    const parsed = parsePositiveInt(value);
+    return parsed ? [parsed] : [];
+  }
+
+  if (Array.isArray(value)) {
+    return [...new Set(value.map((entry) => parsePositiveInt(entry?.id || entry)).filter(Boolean))];
+  }
+
+  if (Array.isArray(value?.connect)) {
+    return [...new Set(value.connect.map((entry) => parsePositiveInt(entry?.id || entry)).filter(Boolean))];
+  }
+
+  if (typeof value?.id === 'number' || typeof value?.id === 'string') {
+    const parsed = parsePositiveInt(value.id);
+    return parsed ? [parsed] : [];
+  }
+
+  return [];
+};
+
 const stripManagedTenantFields = (ctx, slug) => {
   if (slug !== APP_TENANT_UID) {
     return;
@@ -1472,6 +1498,40 @@ module.exports = {
 
       if ((ctx.method === 'POST' || ctx.method === 'PUT') && slug === APP_TENANT_UID) {
         stripManagedTenantFields(ctx, slug);
+      }
+
+      if (ctx.method === 'POST' && slug === APP_TENANT_ADMIN_UID) {
+        const data = getRequestData(ctx);
+        const tenantIds = resolveTenantRelationIds(data?.tenant);
+        if (tenantIds.length > 1) {
+          if (!ctx.request.body?.data || typeof ctx.request.body.data !== 'object') {
+            return ctx.badRequest('Tenant Admin bulk creation requires a structured request body.');
+          }
+
+          const createPayload = ctx.request.body.data;
+          const createdRecords = [];
+          for (const tenantId of tenantIds) {
+            const nextData = {
+              ...createPayload,
+              tenant: {
+                connect: [{ id: tenantId }],
+              },
+            };
+
+            const created = await strapi.entityService.create(APP_TENANT_ADMIN_UID, {
+              data: nextData,
+              populate: {
+                tenant: {
+                  fields: ['id', 'name', 'slug'],
+                },
+              },
+            });
+            createdRecords.push(created);
+          }
+
+          ctx.body = createdRecords[0] || null;
+          return;
+        }
       }
 
       const tenantContext = await getAdminTenantContext(strapi, adminUser);
