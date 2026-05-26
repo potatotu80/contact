@@ -1927,6 +1927,68 @@ module.exports = {
           },
         },
         {
+          method: 'POST',
+          path: '/tenant-admin/bulk-create',
+          handler: async (ctx) => {
+            const adminUser = await getAdminRequestUser(ctx, strapi);
+            if (!adminUser?.id) {
+              return ctx.unauthorized('Admin authentication is required.');
+            }
+
+            const tenantContext = await getAdminTenantContext(strapi, adminUser);
+            if (!tenantContext.isSuperAdmin) {
+              return ctx.forbidden('Only super admins can create tenant admin mappings.');
+            }
+
+            const data = getRequestData(ctx) || {};
+            const tenantIds = Array.isArray(data.tenantIds)
+              ? [...new Set(data.tenantIds.map((entry) => parsePositiveInt(entry)).filter(Boolean))]
+              : [];
+
+            if (!tenantIds.length) {
+              return ctx.badRequest('Please select at least one tenant.');
+            }
+
+            const adminEmail = String(data.admin_email || '').trim();
+            if (!adminEmail) {
+              return ctx.badRequest('Admin Email is required.');
+            }
+
+            const baseData = {
+              admin_email: adminEmail,
+              role: data.role || 'tenant_admin',
+              tenant_name: String(data.tenant_name || '').trim() || null,
+              qr_token: null,
+              qr_code_url: null,
+            };
+
+            const createdRecords = [];
+            for (const tenantId of tenantIds) {
+              const created = await strapi.entityService.create(APP_TENANT_ADMIN_UID, {
+                data: {
+                  ...baseData,
+                  tenant: {
+                    connect: [{ id: tenantId }],
+                  },
+                },
+                populate: {
+                  tenant: {
+                    fields: ['id', 'name', 'slug'],
+                  },
+                },
+              });
+              createdRecords.push(created);
+            }
+
+            ctx.body = {
+              data: createdRecords,
+            };
+          },
+          config: {
+            policies: ['admin::isAuthenticatedAdmin'],
+          },
+        },
+        {
           method: 'GET',
           path: '/app-user-gallery/:id',
           handler: async (ctx) => {

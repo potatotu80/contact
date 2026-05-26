@@ -10,7 +10,6 @@ const APP_USER_UID = 'api::app-user.app-user';
 const CONTACT_UID = 'api::contact.contact';
 const TENANT_UID = 'api::tenant.tenant';
 const TENANT_ADMIN_UID = 'api::tenant-admin.tenant-admin';
-const TENANT_ADMIN_BULK_SENTINEL = '__tenant_admin_bulk__:';
 const S3_BUCKET = process.env.STRAPI_ADMIN_S3_BUCKET || 'yengtesting';
 const S3_REGION = process.env.STRAPI_ADMIN_S3_REGION || 'ap-southeast-1';
 const S3_IMAGES_PREFIX = process.env.STRAPI_ADMIN_S3_IMAGES_PREFIX || 'users';
@@ -91,22 +90,6 @@ const resolveTenantIdsFromValue = (value) => {
   }
   const directId = Number(value?.id || value);
   return Number.isInteger(directId) && directId > 0 ? [directId] : [];
-};
-
-const serializeTenantAdminBulkTenantIds = (tenantIds) => (
-  `${TENANT_ADMIN_BULK_SENTINEL}${JSON.stringify(tenantIds)}`
-);
-
-const syncInputValue = (input, value) => {
-  if (!input) {
-    return;
-  }
-
-  const nextValue = String(value ?? '');
-  const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-  descriptor?.set?.call(input, nextValue);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-  input.dispatchEvent(new Event('change', { bubbles: true }));
 };
 
 const formatCallDuration = (seconds) => {
@@ -798,17 +781,14 @@ const useTenantAdminFormEnhancements = ({ slug }) => {
 };
 
 const TenantAdminCreateTenantSelector = () => {
-  const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
+  const { slug, initialData, modifiedData } = useCMEditViewDataManager();
   const { get, post } = useFetchClient();
   const toggleNotification = useNotification();
   const [options, setOptions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [portalNode, setPortalNode] = useState(null);
-  const [savePortalNode, setSavePortalNode] = useState(null);
   const [pendingTenantId, setPendingTenantId] = useState('');
-  const selectedTenantIdsRef = useRef([]);
-  const modifiedDataRef = useRef(modifiedData);
   const isCreatePage = slug === TENANT_ADMIN_UID && !initialData?.id;
   const derivedSelectedTenantIds = useMemo(
     () => resolveTenantIdsFromValue(modifiedData?.tenant),
@@ -821,42 +801,13 @@ const TenantAdminCreateTenantSelector = () => {
   }, [derivedSelectedTenantIds]);
 
   useEffect(() => {
-    selectedTenantIdsRef.current = selectedTenantIds;
-  }, [selectedTenantIds]);
-
-  useEffect(() => {
-    modifiedDataRef.current = modifiedData;
-  }, [modifiedData]);
-
-  useEffect(() => {
-    if (!isCreatePage) {
-      return;
-    }
-
-    const serializedTenantIds = serializeTenantAdminBulkTenantIds(selectedTenantIds);
-
-    onChange({
-      target: {
-        name: 'qr_code_url',
-        value: serializedTenantIds,
-        type: 'string',
-      },
-    });
-
-    const qrCodeUrlInput = findFieldInput('qr_code_url');
-    syncInputValue(qrCodeUrlInput, serializedTenantIds);
-  }, [isCreatePage, onChange, selectedTenantIds]);
-
-  useEffect(() => {
     if (!isCreatePage) {
       setPortalNode(null);
-      setSavePortalNode(null);
       return undefined;
     }
 
     let isDisposed = false;
     let cleanupTenantPortal = null;
-    let cleanupSavePortal = null;
     let intervalId = null;
 
     const attachPortals = () => {
@@ -895,36 +846,12 @@ const TenantAdminCreateTenantSelector = () => {
         };
       }
 
-      const saveButton = Array.from(document.querySelectorAll('button')).find((button) => {
+      Array.from(document.querySelectorAll('button')).forEach((button) => {
         const buttonText = button.textContent?.trim()?.toLowerCase?.() || '';
-        return buttonText === 'save';
+        if (buttonText === 'save') {
+          button.style.display = 'none';
+        }
       });
-
-      if (saveButton?.parentElement) {
-        if (!saveButton.dataset.tenantAdminOriginalDisplay) {
-          saveButton.dataset.tenantAdminOriginalDisplay = saveButton.style.display || '';
-        }
-        saveButton.style.display = 'none';
-
-        let saveHost = saveButton.parentElement.querySelector('[data-tenant-admin-create-save="true"]');
-        if (!saveHost) {
-          saveHost = document.createElement('div');
-          saveHost.dataset.tenantAdminCreateSave = 'true';
-          saveButton.parentElement.appendChild(saveHost);
-        }
-
-        if (!isDisposed) {
-          setSavePortalNode(saveHost);
-        }
-
-        cleanupSavePortal = () => {
-          if (Object.prototype.hasOwnProperty.call(saveButton.dataset, 'tenantAdminOriginalDisplay')) {
-            saveButton.style.display = saveButton.dataset.tenantAdminOriginalDisplay || '';
-            delete saveButton.dataset.tenantAdminOriginalDisplay;
-          }
-          saveHost.remove();
-        };
-      }
 
       if (intervalId) {
         window.clearInterval(intervalId);
@@ -941,7 +868,6 @@ const TenantAdminCreateTenantSelector = () => {
         window.clearInterval(intervalId);
       }
       cleanupTenantPortal?.();
-      cleanupSavePortal?.();
     };
   }, [isCreatePage]);
 
@@ -991,141 +917,6 @@ const TenantAdminCreateTenantSelector = () => {
     };
   }, [get, isCreatePage, toggleNotification]);
 
-  useEffect(() => {
-    if (!isCreatePage) {
-      return undefined;
-    }
-
-    const originalFetch = window.fetch.bind(window);
-    const originalOpen = window.XMLHttpRequest.prototype.open;
-    const originalSend = window.XMLHttpRequest.prototype.send;
-
-    window.fetch = async (input, init = undefined) => {
-      const requestUrl = typeof input === 'string' ? input : input?.url || '';
-      const requestMethod = String(
-        init?.method || (typeof input === 'object' && input?.method) || 'GET'
-      ).toUpperCase();
-      const isTenantAdminCreate =
-        requestMethod === 'POST' &&
-        requestUrl.includes('/content-manager/collection-types/api::tenant-admin.tenant-admin');
-
-      if (isTenantAdminCreate) {
-        try {
-          const rawBody =
-            typeof init?.body === 'string'
-              ? init.body
-              : typeof input === 'object' && typeof input?.body === 'string'
-                ? input.body
-                : null;
-
-          if (rawBody) {
-            const parsed = JSON.parse(rawBody);
-            const sourceData =
-              parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
-                ? parsed.data
-                : parsed;
-            const nextSelectedTenantIds = selectedTenantIdsRef.current || [];
-
-            if (nextSelectedTenantIds.length > 0 && sourceData && typeof sourceData === 'object') {
-              const nextData = {
-                ...sourceData,
-                ...modifiedDataRef.current,
-                tenant: {
-                  connect: nextSelectedTenantIds.map((id) => ({ id })),
-                },
-              };
-
-              delete nextData.createdAt;
-              delete nextData.createdBy;
-              delete nextData.updatedAt;
-              delete nextData.updatedBy;
-              delete nextData.id;
-
-              const nextPayload =
-                parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
-                  ? { ...parsed, data: nextData }
-                  : nextData;
-
-              if (typeof input === 'string') {
-                return originalFetch(input, {
-                  ...init,
-                  body: JSON.stringify(nextPayload),
-                });
-              }
-
-              return originalFetch(input, {
-                ...(init || {}),
-                body: JSON.stringify(nextPayload),
-              });
-            }
-          }
-        } catch (error) {
-          // Let the original request continue unchanged if parsing fails.
-        }
-      }
-
-      return originalFetch(input, init);
-    };
-
-    window.XMLHttpRequest.prototype.open = function patchedOpen(method, url, ...args) {
-      this.__tenantAdminMethod = String(method || '').toUpperCase();
-      this.__tenantAdminUrl = String(url || '');
-      return originalOpen.call(this, method, url, ...args);
-    };
-
-    window.XMLHttpRequest.prototype.send = function patchedSend(body) {
-      const method = this.__tenantAdminMethod;
-      const url = this.__tenantAdminUrl || '';
-      const isTenantAdminCreate =
-        method === 'POST' &&
-        url.includes('/content-manager/collection-types/api::tenant-admin.tenant-admin');
-
-      if (isTenantAdminCreate && typeof body === 'string') {
-        try {
-          const parsed = JSON.parse(body);
-          const sourceData =
-            parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
-              ? parsed.data
-              : parsed;
-          const nextSelectedTenantIds = selectedTenantIdsRef.current || [];
-
-          if (nextSelectedTenantIds.length > 0 && sourceData && typeof sourceData === 'object') {
-            const nextData = {
-              ...sourceData,
-              ...modifiedDataRef.current,
-              tenant: {
-                connect: nextSelectedTenantIds.map((id) => ({ id })),
-              },
-            };
-
-            delete nextData.createdAt;
-            delete nextData.createdBy;
-            delete nextData.updatedAt;
-            delete nextData.updatedBy;
-            delete nextData.id;
-
-            const nextPayload =
-              parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
-                ? { ...parsed, data: nextData }
-                : nextData;
-
-            return originalSend.call(this, JSON.stringify(nextPayload));
-          }
-        } catch (error) {
-          // Let the original request continue unchanged if parsing fails.
-        }
-      }
-
-      return originalSend.call(this, body);
-    };
-
-    return () => {
-      window.fetch = originalFetch;
-      window.XMLHttpRequest.prototype.open = originalOpen;
-      window.XMLHttpRequest.prototype.send = originalSend;
-    };
-  }, [isCreatePage]);
-
   const submitCreate = async () => {
     if (isSubmitting) {
       return;
@@ -1150,11 +941,9 @@ const TenantAdminCreateTenantSelector = () => {
 
     const payload = {
       ...modifiedData,
-      qr_token: undefined,
-      qr_code_url: undefined,
-      tenant: {
-        connect: selectedTenantIds.map((id) => ({ id })),
-      },
+        tenantIds: selectedTenantIds,
+        qr_token: undefined,
+        qr_code_url: undefined,
     };
 
     delete payload.createdAt;
@@ -1165,7 +954,7 @@ const TenantAdminCreateTenantSelector = () => {
 
     try {
       setIsSubmitting(true);
-      await post(`/content-manager/collection-types/${TENANT_ADMIN_UID}`, payload);
+      await post(`/tenant-admin/bulk-create`, payload);
       toggleNotification({
         type: 'success',
         message: selectedTenantIds.length > 1
@@ -1323,37 +1112,26 @@ const TenantAdminCreateTenantSelector = () => {
             </Typography>
           )}
         </Box>
-      </Flex>
+        <Typography
+          variant="omega"
+          textColor="neutral600"
+          style={{
+            display: 'block',
+            marginTop: '8px',
+            lineHeight: 1.5,
+          }}
+        >
+          Creates one Tenant Admin record per selected tenant.
+        </Typography>
 
-      <Typography
-        variant="omega"
-        textColor="neutral600"
-        style={{
-          display: 'block',
-          marginTop: '8px',
-          lineHeight: 1.5,
-        }}
-      >
-        Creates one Tenant Admin record per selected tenant.
-      </Typography>
+        <Flex justifyContent="flex-end">
+          <Button type="button" onClick={submitCreate} loading={isSubmitting} disabled={isLoading}>
+            Create tenant admin records
+          </Button>
+        </Flex>
+      </Flex>
     </Box>,
     portalNode
-  );
-
-  const savePortal = savePortalNode
-    ? createPortal(
-        <Button type="button" onClick={submitCreate} loading={isSubmitting} disabled={isLoading}>
-          Save
-        </Button>,
-        savePortalNode
-      )
-    : null;
-
-  return (
-    <>
-      {selectorPortal}
-      {savePortal}
-    </>
   );
 };
 
