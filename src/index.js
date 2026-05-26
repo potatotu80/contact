@@ -679,6 +679,95 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
   controller.__tenantPermissionWrapped = true;
 };
 
+const syncTenantAdminListConfiguration = async (strapi) => {
+  const contentTypesService = strapi.plugin('content-manager')?.service('content-types');
+  if (!contentTypesService) {
+    return;
+  }
+
+  const tenantAdminContentType = contentTypesService.findContentType(APP_TENANT_ADMIN_UID);
+  if (!tenantAdminContentType) {
+    return;
+  }
+
+  const configuration = await contentTypesService.findConfiguration(tenantAdminContentType);
+  const desiredListLayout = ['tenant_name', 'tenant', 'admin_email', 'qr_code_url'];
+  const nextConfiguration = {
+    ...configuration,
+    settings: {
+      ...(configuration.settings || {}),
+      mainField: 'tenant_name',
+    },
+    layouts: {
+      ...(configuration.layouts || {}),
+      list: desiredListLayout,
+    },
+    metadatas: {
+      ...(configuration.metadatas || {}),
+      tenant_name: {
+        ...(configuration.metadatas?.tenant_name || {}),
+        list: {
+          ...(configuration.metadatas?.tenant_name?.list || {}),
+          label: 'Tenant Name',
+          searchable: true,
+          sortable: true,
+        },
+        edit: {
+          ...(configuration.metadatas?.tenant_name?.edit || {}),
+          label: 'Tenant Name',
+        },
+      },
+      tenant: {
+        ...(configuration.metadatas?.tenant || {}),
+        list: {
+          ...(configuration.metadatas?.tenant?.list || {}),
+          label: 'Linked Tenant',
+        },
+        edit: {
+          ...(configuration.metadatas?.tenant?.edit || {}),
+          label: 'Linked Tenant',
+          mainField: 'name',
+        },
+      },
+      admin_email: {
+        ...(configuration.metadatas?.admin_email || {}),
+        list: {
+          ...(configuration.metadatas?.admin_email?.list || {}),
+          label: 'Admin Email',
+          searchable: true,
+          sortable: true,
+        },
+        edit: {
+          ...(configuration.metadatas?.admin_email?.edit || {}),
+          label: 'Admin Email',
+        },
+      },
+      qr_code_url: {
+        ...(configuration.metadatas?.qr_code_url || {}),
+        list: {
+          ...(configuration.metadatas?.qr_code_url?.list || {}),
+          label: 'QR URL',
+          searchable: false,
+          sortable: false,
+        },
+        edit: {
+          ...(configuration.metadatas?.qr_code_url?.edit || {}),
+          label: 'QR URL',
+        },
+      },
+      qr_token: {
+        ...(configuration.metadatas?.qr_token || {}),
+        edit: {
+          ...(configuration.metadatas?.qr_token?.edit || {}),
+          label: 'QR Token',
+        },
+      },
+    },
+  };
+
+  await contentTypesService.updateConfiguration(tenantAdminContentType, nextConfiguration);
+};
+
 const escapeHtml = (value) => String(value)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -1636,5 +1725,7 @@ module.exports = {
    * This gives you an opportunity to set up your data model,
    * run jobs, or perform some special logic.
    */
-  bootstrap(/*{ strapi }*/) {},
+  async bootstrap({ strapi }) {
+    await syncTenantAdminListConfiguration(strapi);
+  },
 };

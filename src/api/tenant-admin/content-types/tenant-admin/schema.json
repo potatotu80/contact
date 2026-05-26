@@ -10,6 +10,65 @@
   "options": {
     "draftAndPublish": false
   },
+  "config": {
+    "settings": {
+      "mainField": "tenant_name"
+    },
+    "layouts": {
+      "list": [
+        "tenant_name",
+        "tenant",
+        "admin_email",
+        "qr_code_url"
+      ]
+    },
+    "metadatas": {
+      "tenant_name": {
+        "list": {
+          "label": "Tenant Name",
+          "searchable": true,
+          "sortable": true
+        },
+        "edit": {
+          "label": "Tenant Name"
+        }
+      },
+      "tenant": {
+        "list": {
+          "label": "Linked Tenant"
+        },
+        "edit": {
+          "label": "Linked Tenant",
+          "mainField": "name"
+        }
+      },
+      "admin_email": {
+        "list": {
+          "label": "Admin Email",
+          "searchable": true,
+          "sortable": true
+        },
+        "edit": {
+          "label": "Admin Email"
+        }
+      },
+      "qr_code_url": {
+        "list": {
+          "label": "QR URL",
+          "searchable": false,
+          "sortable": false
+        },
+        "edit": {
+          "label": "QR URL"
+        }
+      },
+      "qr_token": {
+        "edit": {
+          "label": "QR Token"
+        }
+      }
+    }
+  },
   "attributes": {
     "admin_user_id": {
       "type": "integer"
