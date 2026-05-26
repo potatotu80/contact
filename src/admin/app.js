@@ -645,6 +645,25 @@ const findFieldContainer = (fieldName) => {
   );
 };
 
+const normalizeFieldLabel = (value) => String(value || '').replace(/\*/g, '').trim().toLowerCase();
+
+const findFieldContainerByLabel = (labelCandidates) => {
+  const normalizedCandidates = labelCandidates.map(normalizeFieldLabel);
+  const labels = Array.from(document.querySelectorAll('label, [role="label"]'));
+  const matchingLabel = labels.find((label) => normalizedCandidates.includes(normalizeFieldLabel(label.textContent)));
+
+  if (!matchingLabel) {
+    return null;
+  }
+
+  return (
+    matchingLabel.closest('[data-strapi-field]') ||
+    matchingLabel.closest('[class*="Field"]') ||
+    matchingLabel.parentElement?.parentElement ||
+    matchingLabel.parentElement
+  );
+};
+
 const useTenantFormEnhancements = ({
   slug,
   initialData,
@@ -811,7 +830,9 @@ const TenantAdminCreateTenantSelector = () => {
     let intervalId = null;
 
     const attachPortals = () => {
-      const container = findFieldContainer('tenant');
+      const container =
+        findFieldContainer('tenant') ||
+        findFieldContainerByLabel(['Linked Tenant', 'Tenant']);
       if (container) {
         const children = Array.from(container.children);
         const hiddenChildren = children.slice(1);
