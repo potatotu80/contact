@@ -1509,6 +1509,10 @@ module.exports = {
             return ctx.badRequest('Tenant Admin bulk creation requires a valid request body.');
           }
 
+          strapi.log.info(
+            `[tenant-admin-bulk-create] admin_email="${String(createPayload.admin_email || '').trim()}" tenantIds=${JSON.stringify(tenantIds)}`
+          );
+
           const createdRecords = [];
           for (const tenantId of tenantIds) {
             const nextData = {
@@ -1527,8 +1531,14 @@ module.exports = {
               },
             });
             createdRecords.push(created);
+            strapi.log.info(
+              `[tenant-admin-bulk-create] created record id=${created?.id || 'unknown'} for tenantId=${tenantId}`
+            );
           }
 
+          strapi.log.info(
+            `[tenant-admin-bulk-create] completed createdCount=${createdRecords.length}`
+          );
           ctx.body = createdRecords[0] || null;
           return;
         }
