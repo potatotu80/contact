@@ -121,6 +121,30 @@ const getContentManagerEntityId = (requestPath) => {
   return parsePositiveInt(match?.[1]);
 };
 
+const getContentManagerRelationParams = (requestPath) => {
+  const existingMatch = requestPath.match(/^\/content-manager\/relations\/([^/]+)\/(\d+)\/([^/]+)/);
+  if (existingMatch) {
+    return {
+      model: decodeURIComponent(existingMatch[1]),
+      entityId: parsePositiveInt(existingMatch[2]),
+      targetField: decodeURIComponent(existingMatch[3]),
+      mode: 'existing',
+    };
+  }
+
+  const availableMatch = requestPath.match(/^\/content-manager\/relations\/([^/]+)\/([^/]+)/);
+  if (availableMatch) {
+    return {
+      model: decodeURIComponent(availableMatch[1]),
+      entityId: null,
+      targetField: decodeURIComponent(availableMatch[2]),
+      mode: 'available',
+    };
+  }
+
+  return null;
+};
+
 const getRequestData = (ctx) => {
   if (ctx.request.body?.data && typeof ctx.request.body.data === 'object') {
     return ctx.request.body.data;
@@ -1366,6 +1390,79 @@ module.exports = {
       const adminUser = await getAdminRequestUser(ctx, strapi);
       if (!adminUser?.id) {
         return next();
+      }
+
+      const relationRequest = getContentManagerRelationParams(ctx.request.path || '');
+      if (ctx.method === 'GET' && relationRequest?.targetField === 'tenant') {
+        const { model, entityId, mode } = relationRequest;
+        const supportedRelationModel = model === APP_USER_UID || model === CONTACT_UID;
+        if (!supportedRelationModel) {
+          return next();
+        }
+
+        const tenantContext = await getAdminTenantContext(strapi, adminUser);
+        if (tenantContext.isSuperAdmin) {
+          return next();
+        }
+
+        if (!tenantContext.tenantIds.length) {
+          return ctx.forbidden('This admin user is not assigned to a tenant.');
+        }
+
+        if (mode === 'available') {
+          const page = Math.max(1, Number(ctx.request.query?.page) || 1);
+          const pageSize = Math.max(1, Math.min(100, Number(ctx.request.query?.pageSize) || 10));
+          const start = (page - 1) * pageSize;
+          const tenantResults = tenantContext.tenants
+            .slice()
+            .sort((left, right) => String(left?.name || left?.slug || '').localeCompare(String(right?.name || right?.slug || '')))
+            .slice(start, start + pageSize)
+            .map((tenant) => ({
+              id: tenant.id,
+              name: tenant.name || tenant.slug || String(tenant.id),
+              slug: tenant.slug || null,
+            }));
+
+          ctx.body = {
+            results: tenantResults,
+            pagination: {
+              page,
+              pageSize,
+              pageCount: Math.max(1, Math.ceil(tenantContext.tenants.length / pageSize)),
+              total: tenantContext.tenants.length,
+            },
+          };
+          return;
+        }
+
+        if (!entityId) {
+          return ctx.badRequest('Entry id must be a valid number.');
+        }
+
+        const allowed = await Promise.all(
+          tenantContext.tenantIds.map((tenantId) =>
+            model === APP_USER_UID
+              ? assertTenantScopeForUser(strapi, tenantId, entityId)
+              : assertTenantScopeForContact(strapi, tenantId, entityId)
+          )
+        );
+
+        const scopedEntity = allowed.find(Boolean);
+        if (!scopedEntity) {
+          return ctx.forbidden('This record is outside your tenants.');
+        }
+
+        const tenant = scopedEntity.tenant || null;
+        ctx.body = {
+          data: tenant
+            ? {
+                id: tenant.id,
+                name: tenant.name || tenant.slug || String(tenant.id),
+                slug: tenant.slug || null,
+              }
+            : null,
+        };
+        return;
       }
 
       const slug = getContentManagerSlug(ctx.request.path || '');

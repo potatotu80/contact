@@ -63,6 +63,15 @@ const extractTenantRecord = (value) => {
   if (Array.isArray(value?.connect)) {
     return value.connect[0] || null;
   }
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    !Object.prototype.hasOwnProperty.call(value, 'id') &&
+    !Object.prototype.hasOwnProperty.call(value, 'name') &&
+    !Object.prototype.hasOwnProperty.call(value, 'slug')
+  ) {
+    return null;
+  }
   return value;
 };
 
