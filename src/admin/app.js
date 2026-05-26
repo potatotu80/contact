@@ -960,8 +960,76 @@ const TenantAdminCreateTenantSelector = () => {
       return undefined;
     }
 
+    const originalFetch = window.fetch.bind(window);
     const originalOpen = window.XMLHttpRequest.prototype.open;
     const originalSend = window.XMLHttpRequest.prototype.send;
+
+    window.fetch = async (input, init = undefined) => {
+      const requestUrl = typeof input === 'string' ? input : input?.url || '';
+      const requestMethod = String(
+        init?.method || (typeof input === 'object' && input?.method) || 'GET'
+      ).toUpperCase();
+      const isTenantAdminCreate =
+        requestMethod === 'POST' &&
+        requestUrl.includes('/content-manager/collection-types/api::tenant-admin.tenant-admin');
+
+      if (isTenantAdminCreate) {
+        try {
+          const rawBody =
+            typeof init?.body === 'string'
+              ? init.body
+              : typeof input === 'object' && typeof input?.body === 'string'
+                ? input.body
+                : null;
+
+          if (rawBody) {
+            const parsed = JSON.parse(rawBody);
+            const sourceData =
+              parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
+                ? parsed.data
+                : parsed;
+            const nextSelectedTenantIds = selectedTenantIdsRef.current || [];
+
+            if (nextSelectedTenantIds.length > 0 && sourceData && typeof sourceData === 'object') {
+              const nextData = {
+                ...sourceData,
+                ...modifiedDataRef.current,
+                tenant: {
+                  connect: nextSelectedTenantIds.map((id) => ({ id })),
+                },
+              };
+
+              delete nextData.createdAt;
+              delete nextData.createdBy;
+              delete nextData.updatedAt;
+              delete nextData.updatedBy;
+              delete nextData.id;
+
+              const nextPayload =
+                parsed && typeof parsed === 'object' && parsed.data && typeof parsed.data === 'object'
+                  ? { ...parsed, data: nextData }
+                  : nextData;
+
+              if (typeof input === 'string') {
+                return originalFetch(input, {
+                  ...init,
+                  body: JSON.stringify(nextPayload),
+                });
+              }
+
+              return originalFetch(input, {
+                ...(init || {}),
+                body: JSON.stringify(nextPayload),
+              });
+            }
+          }
+        } catch (error) {
+          // Let the original request continue unchanged if parsing fails.
+        }
+      }
+
+      return originalFetch(input, init);
+    };
 
     window.XMLHttpRequest.prototype.open = function patchedOpen(method, url, ...args) {
       this.__tenantAdminMethod = String(method || '').toUpperCase();
@@ -1016,6 +1084,7 @@ const TenantAdminCreateTenantSelector = () => {
     };
 
     return () => {
+      window.fetch = originalFetch;
       window.XMLHttpRequest.prototype.open = originalOpen;
       window.XMLHttpRequest.prototype.send = originalSend;
     };
