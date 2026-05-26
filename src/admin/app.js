@@ -808,7 +808,7 @@ const TenantAdminCreateTenantSelector = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pendingTenantId, setPendingTenantId] = useState('');
-  const isCreatePage = slug === TENANT_ADMIN_UID && !initialData?.id;
+  const isCreatePage = slug === TENANT_ADMIN_UID;
   const [selectedTenantIds, setSelectedTenantIds] = useState([]);
 
   useEffect(() => {
@@ -1558,28 +1558,7 @@ const TenantAdminPanel = () => {
   const isCreatePage = !initialData?.id;
 
   if (isCreatePage) {
-    return (
-      <>
-        <TenantAdminCreateTenantSelector />
-        <Box
-          background="neutral0"
-          borderColor="neutral200"
-          hasRadius
-          padding={4}
-          shadow="tableShadow"
-        >
-          <Flex direction="column" gap={3}>
-            <Typography variant="pi" textColor="neutral600">
-              Tenant Admin QR
-            </Typography>
-
-            <Typography variant="omega" textColor="neutral500">
-              One QR record will be created per selected tenant.
-            </Typography>
-          </Flex>
-        </Box>
-      </>
-    );
+    return <TenantAdminCreateTenantSelector />;
   }
 
   const qrCodeUrl = String(modifiedData?.qr_code_url || initialData?.qr_code_url || '').trim();
