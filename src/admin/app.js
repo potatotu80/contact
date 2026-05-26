@@ -700,6 +700,7 @@ const useTenantAdminFormEnhancements = ({ slug }) => {
     }
 
     const applyEnhancements = () => {
+      const isCreatePage = window.location.pathname.endsWith('/create');
       const adminUserIdContainer = findFieldContainer('admin_user_id');
       if (adminUserIdContainer) {
         adminUserIdContainer.style.display = 'none';
@@ -708,13 +709,48 @@ const useTenantAdminFormEnhancements = ({ slug }) => {
       const adminEmailInput = findFieldInput('admin_email');
       if (adminEmailInput) {
         adminEmailInput.type = 'email';
-        adminEmailInput.placeholder = 'Enter the Strapi admin email to assign';
+        adminEmailInput.placeholder = 'Enter an existing Strapi admin email';
         adminEmailInput.autocomplete = 'email';
+      }
+      const adminEmailContainer = findFieldContainer('admin_email');
+      if (adminEmailContainer && !adminEmailContainer.querySelector('[data-tenant-admin-admin-email-hint="true"]')) {
+        const hint = document.createElement('div');
+        hint.dataset.tenantAdminAdminEmailHint = 'true';
+        hint.textContent = 'This must already exist as a Strapi admin user.';
+        hint.style.marginTop = '6px';
+        hint.style.fontSize = '12px';
+        hint.style.color = '#666687';
+        adminEmailContainer.appendChild(hint);
       }
 
       const tenantNameInput = findFieldInput('tenant_name');
       if (tenantNameInput) {
         tenantNameInput.placeholder = 'Enter the customer-facing tenant name for this admin QR';
+      }
+
+      const tenantContainer = findFieldContainer('tenant');
+      if (tenantContainer && !tenantContainer.querySelector('[data-tenant-admin-tenant-hint="true"]')) {
+        const hint = document.createElement('div');
+        hint.dataset.tenantAdminTenantHint = 'true';
+        hint.textContent = isCreatePage
+          ? 'You can add multiple tenants here. Saving will create one Tenant Admin record per tenant.'
+          : 'This edit page stays single-tenant. Delete the record if you want to remove this tenant assignment.';
+        hint.style.marginTop = '6px';
+        hint.style.fontSize = '12px';
+        hint.style.color = '#666687';
+        tenantContainer.appendChild(hint);
+      }
+
+      if (isCreatePage) {
+        const qrTokenContainer = findFieldContainer('qr_token');
+        if (qrTokenContainer) {
+          qrTokenContainer.style.display = 'none';
+        }
+
+        const qrUrlContainer = findFieldContainer('qr_code_url');
+        if (qrUrlContainer) {
+          qrUrlContainer.style.display = 'none';
+        }
       }
     };
 

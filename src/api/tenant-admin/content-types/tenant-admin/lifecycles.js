@@ -124,6 +124,7 @@ const syncAdminSnapshot = async (event) => {
   const adminEmail = String(data.admin_email || '').trim();
   const adminUserId = parsePositiveInt(data.admin_user_id);
   const existingRecordId = parsePositiveInt(event.params?.where?.id);
+  const providedAdminEmail = adminEmail;
 
   let adminUser = null;
 
@@ -166,7 +167,13 @@ const syncAdminSnapshot = async (event) => {
   }
 
   if (!adminUser) {
-    throw new ValidationError('Tenant Admin requires a valid admin email or admin user id.');
+    if (providedAdminEmail) {
+      throw new ValidationError(
+        `No existing Strapi admin user was found for "${providedAdminEmail}". Create that admin user first, then assign tenants here.`
+      );
+    }
+
+    throw new ValidationError('Tenant Admin requires an existing Strapi admin email or admin user id.');
   }
 
   data.admin_user_id = adminUser.id;
