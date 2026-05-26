@@ -768,6 +768,83 @@ const syncTenantAdminListConfiguration = async (strapi) => {
   await contentTypesService.updateConfiguration(tenantAdminContentType, nextConfiguration);
 };
 
+const buildScopedTenantAdminListResponse = async ({ strapi, adminUserId, tenantIds, requestQuery }) => {
+  const mergedFilters =
+    requestQuery?.filters && Object.keys(requestQuery.filters).length
+      ? {
+          $and: [
+            requestQuery.filters,
+            { admin_user_id: { $eq: adminUserId } },
+            { tenant: { id: { $in: tenantIds } } },
+          ],
+        }
+      : {
+          $and: [
+            { admin_user_id: { $eq: adminUserId } },
+            { tenant: { id: { $in: tenantIds } } },
+          ],
+        };
+
+  const page = Math.max(1, Number(requestQuery?.page) || 1);
+  const pageSize = Math.max(1, Math.min(100, Number(requestQuery?.pageSize) || 10));
+  const start = (page - 1) * pageSize;
+  const sort = requestQuery?.sort || ['id:asc'];
+  const [results, total] = await Promise.all([
+    strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+      filters: mergedFilters,
+      fields: Object.keys(strapi.getModel(APP_TENANT_ADMIN_UID)?.attributes || {}),
+      sort,
+      start,
+      limit: pageSize,
+      populate: {
+        tenant: {
+          fields: ['id', 'name', 'slug'],
+        },
+      },
+    }),
+    strapi.db.query(APP_TENANT_ADMIN_UID).count({
+      where: mergedFilters,
+    }),
+  ]);
+
+  return {
+    results,
+    pagination: {
+      page,
+      pageSize,
+      pageCount: Math.ceil(total / pageSize),
+      total,
+    },
+  };
+};
+
+const findScopedTenantAdminRecord = async ({ strapi, adminUserId, tenantIds, entityId }) => {
+  const results = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+    filters: {
+      id: {
+        $eq: entityId,
+      },
+      admin_user_id: {
+        $eq: adminUserId,
+      },
+      tenant: {
+        id: {
+          $in: tenantIds,
+        },
+      },
+    },
+    fields: Object.keys(strapi.getModel(APP_TENANT_ADMIN_UID)?.attributes || {}),
+    populate: {
+      tenant: {
+        fields: ['id', 'name', 'slug'],
+      },
+    },
+    limit: 1,
+  });
+
+  return results[0] || null;
+};
+
 const escapeHtml = (value) => String(value)
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -1313,7 +1390,30 @@ module.exports = {
 
       if (slug === APP_TENANT_ADMIN_UID) {
         if (ctx.method === 'GET') {
-          return next();
+          const entityId = getContentManagerEntityId(ctx.request.path || '');
+          if (!entityId) {
+            ctx.body = await buildScopedTenantAdminListResponse({
+              strapi,
+              adminUserId: adminUser.id,
+              tenantIds: tenantContext.tenantIds,
+              requestQuery: ctx.request.query,
+            });
+            return;
+          }
+
+          const tenantAdminRecord = await findScopedTenantAdminRecord({
+            strapi,
+            adminUserId: adminUser.id,
+            tenantIds: tenantContext.tenantIds,
+            entityId,
+          });
+
+          if (!tenantAdminRecord) {
+            return ctx.forbidden('This tenant admin record is outside your scope.');
+          }
+
+          ctx.body = tenantAdminRecord;
+          return;
         }
 
         return ctx.forbidden('Tenant admin users cannot modify tenant admin mappings.');
