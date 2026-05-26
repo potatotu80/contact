@@ -788,6 +788,7 @@ const TenantAdminCreateTenantSelector = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [portalNode, setPortalNode] = useState(null);
+  const [savePortalNode, setSavePortalNode] = useState(null);
   const [pendingTenantId, setPendingTenantId] = useState('');
   const isCreatePage = slug === TENANT_ADMIN_UID && !initialData?.id;
   const derivedSelectedTenantIds = useMemo(
@@ -803,50 +804,81 @@ const TenantAdminCreateTenantSelector = () => {
   useEffect(() => {
     if (!isCreatePage) {
       setPortalNode(null);
+      setSavePortalNode(null);
       return undefined;
     }
 
     let isDisposed = false;
-    let cleanup = null;
+    let cleanupTenantPortal = null;
+    let cleanupSavePortal = null;
     let intervalId = null;
 
-    const attachPortal = () => {
+    const attachPortals = () => {
       const container = findFieldContainer('tenant');
-      if (!container) {
-        return;
+      if (container) {
+        const children = Array.from(container.children);
+        const hiddenChildren = children.slice(1);
+        hiddenChildren.forEach((child) => {
+          if (!child.dataset.tenantAdminOriginalDisplay) {
+            child.dataset.tenantAdminOriginalDisplay = child.style.display || '';
+          }
+          child.style.display = 'none';
+        });
+
+        let host = container.querySelector('[data-tenant-admin-multi-select="true"]');
+        if (!host) {
+          host = document.createElement('div');
+          host.dataset.tenantAdminMultiSelect = 'true';
+          host.style.marginTop = '8px';
+          host.style.width = '100%';
+          container.appendChild(host);
+        }
+
+        if (!isDisposed) {
+          setPortalNode(host);
+        }
+
+        cleanupTenantPortal = () => {
+          hiddenChildren.forEach((child) => {
+            if (Object.prototype.hasOwnProperty.call(child.dataset, 'tenantAdminOriginalDisplay')) {
+              child.style.display = child.dataset.tenantAdminOriginalDisplay || '';
+              delete child.dataset.tenantAdminOriginalDisplay;
+            }
+          });
+          host.remove();
+        };
       }
 
-      const children = Array.from(container.children);
-      const hiddenChildren = children.slice(1);
-      hiddenChildren.forEach((child) => {
-        if (!child.dataset.tenantAdminOriginalDisplay) {
-          child.dataset.tenantAdminOriginalDisplay = child.style.display || '';
-        }
-        child.style.display = 'none';
+      const saveButton = Array.from(document.querySelectorAll('button')).find((button) => {
+        const buttonText = button.textContent?.trim()?.toLowerCase?.() || '';
+        return buttonText === 'save';
       });
 
-      let host = container.querySelector('[data-tenant-admin-multi-select="true"]');
-      if (!host) {
-        host = document.createElement('div');
-        host.dataset.tenantAdminMultiSelect = 'true';
-        host.style.marginTop = '8px';
-        host.style.width = '100%';
-        container.appendChild(host);
-      }
+      if (saveButton?.parentElement) {
+        if (!saveButton.dataset.tenantAdminOriginalDisplay) {
+          saveButton.dataset.tenantAdminOriginalDisplay = saveButton.style.display || '';
+        }
+        saveButton.style.display = 'none';
 
-      if (!isDisposed) {
-        setPortalNode(host);
-      }
+        let saveHost = saveButton.parentElement.querySelector('[data-tenant-admin-create-save="true"]');
+        if (!saveHost) {
+          saveHost = document.createElement('div');
+          saveHost.dataset.tenantAdminCreateSave = 'true';
+          saveButton.parentElement.appendChild(saveHost);
+        }
 
-      cleanup = () => {
-        hiddenChildren.forEach((child) => {
-          if (Object.prototype.hasOwnProperty.call(child.dataset, 'tenantAdminOriginalDisplay')) {
-            child.style.display = child.dataset.tenantAdminOriginalDisplay || '';
-            delete child.dataset.tenantAdminOriginalDisplay;
+        if (!isDisposed) {
+          setSavePortalNode(saveHost);
+        }
+
+        cleanupSavePortal = () => {
+          if (Object.prototype.hasOwnProperty.call(saveButton.dataset, 'tenantAdminOriginalDisplay')) {
+            saveButton.style.display = saveButton.dataset.tenantAdminOriginalDisplay || '';
+            delete saveButton.dataset.tenantAdminOriginalDisplay;
           }
-        });
-        host.remove();
-      };
+          saveHost.remove();
+        };
+      }
 
       if (intervalId) {
         window.clearInterval(intervalId);
@@ -854,15 +886,16 @@ const TenantAdminCreateTenantSelector = () => {
       }
     };
 
-    intervalId = window.setInterval(attachPortal, 400);
-    attachPortal();
+    intervalId = window.setInterval(attachPortals, 400);
+    attachPortals();
 
     return () => {
       isDisposed = true;
       if (intervalId) {
         window.clearInterval(intervalId);
       }
-      cleanup?.();
+      cleanupTenantPortal?.();
+      cleanupSavePortal?.();
     };
   }, [isCreatePage]);
 
@@ -912,153 +945,72 @@ const TenantAdminCreateTenantSelector = () => {
     };
   }, [get, isCreatePage, toggleNotification]);
 
-  useEffect(() => {
-    if (!isCreatePage) {
-      return undefined;
+  const submitCreate = async () => {
+    if (isSubmitting) {
+      return;
     }
 
-    let isDisposed = false;
-    let intervalId = null;
-    let cleanup = null;
-
-    const attachSubmitHandler = () => {
-      const form = document.querySelector('form');
-      if (!form) {
-        return;
-      }
-
-      const submitCreate = async () => {
-        if (isSubmitting) {
-          return;
-        }
-
-        const adminEmail = String(modifiedData?.admin_email || '').trim();
-        if (!adminEmail) {
-          toggleNotification({
-            type: 'warning',
-            message: 'Admin Email is required.',
-          });
-          return;
-        }
-
-        if (!selectedTenantIds.length) {
-          toggleNotification({
-            type: 'warning',
-            message: 'Please select at least one tenant.',
-          });
-          return;
-        }
-
-        const payload = {
-          ...modifiedData,
-          qr_token: undefined,
-          qr_code_url: undefined,
-          tenant: {
-            connect: selectedTenantIds.map((id) => ({ id })),
-          },
-        };
-
-        delete payload.createdAt;
-        delete payload.createdBy;
-        delete payload.updatedAt;
-        delete payload.updatedBy;
-        delete payload.id;
-
-        try {
-          setIsSubmitting(true);
-          await post(`/content-manager/collection-types/${TENANT_ADMIN_UID}`, payload);
-          toggleNotification({
-            type: 'success',
-            message: selectedTenantIds.length > 1
-              ? 'Tenant Admin records created.'
-              : 'Tenant Admin record created.',
-          });
-          window.location.assign(
-            buildCollectionTypeListUrl(TENANT_ADMIN_UID, {
-              page: '1',
-              pageSize: '10',
-              sort: 'id:ASC',
-            })
-          );
-        } catch (error) {
-          const message =
-            error?.response?.data?.error?.message ||
-            error?.message ||
-            'Failed to create Tenant Admin records.';
-          toggleNotification({
-            type: 'warning',
-            message,
-          });
-        } finally {
-          if (!isDisposed) {
-            setIsSubmitting(false);
-          }
-        }
-      };
-
-      const submitHandler = async (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation?.();
-        await submitCreate();
-      };
-
-      const clickHandler = (event) => {
-        const button = event.target?.closest?.('button');
-        if (!button) return;
-
-        const buttonText = button.textContent?.trim()?.toLowerCase?.() || '';
-        if (buttonText !== 'save') return;
-
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation?.();
-        submitCreate();
-      };
-
-      const saveButton = Array.from(document.querySelectorAll('button')).find((button) => {
-        const buttonText = button.textContent?.trim()?.toLowerCase?.() || '';
-        return buttonText === 'save';
+    const adminEmail = String(modifiedData?.admin_email || '').trim();
+    if (!adminEmail) {
+      toggleNotification({
+        type: 'warning',
+        message: 'Admin Email is required.',
       });
+      return;
+    }
 
-      if (saveButton && !saveButton.dataset.tenantAdminOriginalType) {
-        saveButton.dataset.tenantAdminOriginalType = saveButton.getAttribute('type') || '';
-        saveButton.setAttribute('type', 'button');
-      }
+    if (!selectedTenantIds.length) {
+      toggleNotification({
+        type: 'warning',
+        message: 'Please select at least one tenant.',
+      });
+      return;
+    }
 
-      form.addEventListener('submit', submitHandler, true);
-      document.addEventListener('click', clickHandler, true);
-      cleanup = () => {
-        form.removeEventListener('submit', submitHandler, true);
-        document.removeEventListener('click', clickHandler, true);
-        if (saveButton && Object.prototype.hasOwnProperty.call(saveButton.dataset, 'tenantAdminOriginalType')) {
-          const originalType = saveButton.dataset.tenantAdminOriginalType;
-          if (originalType) {
-            saveButton.setAttribute('type', originalType);
-          } else {
-            saveButton.removeAttribute('type');
-          }
-          delete saveButton.dataset.tenantAdminOriginalType;
-        }
-      };
-
-      if (intervalId) {
-        window.clearInterval(intervalId);
-        intervalId = null;
-      }
+    const payload = {
+      ...modifiedData,
+      qr_token: undefined,
+      qr_code_url: undefined,
+      tenant: {
+        connect: selectedTenantIds.map((id) => ({ id })),
+      },
     };
 
-    intervalId = window.setInterval(attachSubmitHandler, 400);
-    attachSubmitHandler();
+    delete payload.createdAt;
+    delete payload.createdBy;
+    delete payload.updatedAt;
+    delete payload.updatedBy;
+    delete payload.id;
 
-    return () => {
-      isDisposed = true;
-      if (intervalId) {
-        window.clearInterval(intervalId);
-      }
-      cleanup?.();
-    };
-  }, [isCreatePage, isSubmitting, modifiedData, post, selectedTenantIds, toggleNotification]);
+    try {
+      setIsSubmitting(true);
+      await post(`/content-manager/collection-types/${TENANT_ADMIN_UID}`, payload);
+      toggleNotification({
+        type: 'success',
+        message: selectedTenantIds.length > 1
+          ? 'Tenant Admin records created.'
+          : 'Tenant Admin record created.',
+      });
+      window.location.assign(
+        buildCollectionTypeListUrl(TENANT_ADMIN_UID, {
+          page: '1',
+          pageSize: '10',
+          sort: 'id:ASC',
+        })
+      );
+    } catch (error) {
+      const message =
+        error?.response?.data?.error?.message ||
+        error?.message ||
+        'Failed to create Tenant Admin records.';
+      toggleNotification({
+        type: 'warning',
+        message,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   if (!isCreatePage || !portalNode) {
     return null;
@@ -1084,7 +1036,7 @@ const TenantAdminCreateTenantSelector = () => {
     setSelectedTenantIds((current) => current.filter((id) => id !== tenantId));
   };
 
-  return createPortal(
+  const selectorPortal = createPortal(
     <Box
       style={{
         width: '100%',
@@ -1204,6 +1156,22 @@ const TenantAdminCreateTenantSelector = () => {
       </Typography>
     </Box>,
     portalNode
+  );
+
+  const savePortal = savePortalNode
+    ? createPortal(
+        <Button onClick={submitCreate} loading={isSubmitting} disabled={isLoading}>
+          Save
+        </Button>,
+        savePortalNode
+      )
+    : null;
+
+  return (
+    <>
+      {selectorPortal}
+      {savePortal}
+    </>
   );
 };
 
