@@ -981,6 +981,8 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
   const installUrl = ensureAbsoluteUrl(tenant?.android_apk_url);
   const deepLinkUrl = buildTenantDeepLinkUrl({ tenantCode, referralCode, qrToken });
   const intentUrl = buildTenantIntentUrl({ tenantCode, referralCode, qrToken });
+  const sharedDeepLinkScheme = getSharedDeepLinkScheme();
+  const sharedAndroidApplicationId = getSharedAndroidApplicationId();
   const safeMessage = escapeHtml('Please open this link on an Android device.');
   const safeQrUrl = escapeHtml(qrCodeUrl || '');
 
@@ -1066,20 +1068,41 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         margin-top: 12px;
         font-size: 13px;
       }
-      code {
-        display: block;
-        margin-top: 20px;
-        padding: 12px 14px;
-        border-radius: 12px;
-        background: #f5f7fb;
-        color: #34415e;
-        word-break: break-all;
-      }
-      @keyframes revealInstall {
-        to {
-          opacity: 1;
-          visibility: visible;
+        code {
+          display: block;
+          margin-top: 20px;
+          padding: 12px 14px;
+          border-radius: 12px;
+          background: #f5f7fb;
+          color: #34415e;
+          word-break: break-all;
         }
+        .debug {
+          margin-top: 18px;
+          padding: 12px 14px;
+          border-radius: 12px;
+          background: #f5f7fb;
+          border: 1px solid var(--border);
+        }
+        .debug strong {
+          display: block;
+          margin-bottom: 8px;
+          color: var(--text);
+        }
+        .debug ul {
+          margin: 0;
+          padding-left: 18px;
+          color: #34415e;
+        }
+        .debug li {
+          margin: 6px 0;
+          word-break: break-all;
+        }
+        @keyframes revealInstall {
+          to {
+            opacity: 1;
+            visibility: visible;
+          }
       }
     </style>
   </head>
@@ -1093,11 +1116,24 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         <a class="install-button" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
         <p class="hint">If the app did not open, install the latest APK and try the QR again.</p>
       </div>
-      <div class="install-box" id="openAppBox">
-        <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
-      </div>
-      ${safeQrUrl ? `<code>${safeQrUrl}</code>` : ''}
-    </main>
+        <div class="install-box" id="openAppBox">
+          <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
+        </div>
+        <div class="debug">
+          <strong>Debug Info</strong>
+          <ul>
+            <li>Android request: ${escapeHtml(String(isAndroidRequest))}</li>
+            <li>Deep link scheme: ${escapeHtml(sharedDeepLinkScheme)}</li>
+            <li>Android package: ${escapeHtml(sharedAndroidApplicationId)}</li>
+            <li>Deep link URL: ${escapeHtml(deepLinkUrl)}</li>
+            <li>Intent URL: ${escapeHtml(intentUrl)}</li>
+            <li>APK URL: ${escapeHtml(installUrl || 'Not set')}</li>
+            <li>Tenant code: ${escapeHtml(tenantCode || '')}</li>
+            <li>QR token present: ${escapeHtml(String(Boolean(qrToken)))}</li>
+          </ul>
+        </div>
+        ${safeQrUrl ? `<code>${safeQrUrl}</code>` : ''}
+      </main>
     <script>
       (function () {
         var isAndroid = /Android/i.test(navigator.userAgent || "");
