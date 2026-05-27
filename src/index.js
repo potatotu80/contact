@@ -1116,7 +1116,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         <a class="install-button" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
         <p class="hint">If the app did not open, install the latest APK and try the QR again.</p>
       </div>
-        <div class="install-box" id="openAppBox">
+        <div class="install-box" id="openAppBox" style="${isAndroidRequest && (intentUrl || deepLinkUrl) ? 'display:block;opacity:1;visibility:visible;' : ''}">
           <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
         </div>
         <div class="debug">
@@ -1171,6 +1171,12 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           return;
         }
 
+        if (openAppBox && (intentUrl || deepLinkUrl)) {
+          openAppBox.style.display = "block";
+          openAppBox.style.opacity = "1";
+          openAppBox.style.visibility = "visible";
+        }
+
         if (!installUrl) {
           message.textContent = "This tenant is missing an APK download URL.";
           if (installButton) {
@@ -1179,7 +1185,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         }
 
         var fallbackDelayMs = 2200;
-        status.textContent = "If nothing happens, the install button will appear in a moment.";
+        status.textContent = "Tap Open app manually now, or wait for the install button if the app is not installed.";
 
         window.setTimeout(function () {
           if (installBox) {
