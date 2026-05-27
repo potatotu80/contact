@@ -1042,15 +1042,9 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       .status {
         margin-top: 18px;
       }
-      .install-box {
+      .action-box {
         display: none;
-        margin-top: 24px;
-      }
-      .install-box.android-delayed {
-        display: block;
-        opacity: 0;
-        visibility: hidden;
-        animation: revealInstall 0s linear 2.2s forwards;
+        margin-top: 20px;
       }
       .install-button {
         width: 100%;
@@ -1063,6 +1057,11 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         color: #fff;
         text-decoration: none;
         font-weight: 700;
+      }
+      .install-button.secondary {
+        background: #eef3fb;
+        color: var(--primary);
+        border: 1px solid var(--border);
       }
       .hint {
         margin-top: 12px;
@@ -1098,12 +1097,6 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           margin: 6px 0;
           word-break: break-all;
         }
-        @keyframes revealInstall {
-          to {
-            opacity: 1;
-            visibility: visible;
-          }
-      }
     </style>
   </head>
   <body>
@@ -1112,13 +1105,13 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       <h1>Open in app</h1>
       <p id="message">Trying to open the Android app…</p>
       <p class="status" id="status"></p>
-      <div class="install-box ${isAndroidRequest ? 'android-delayed' : ''}" id="installBox">
-        <a class="install-button" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
-        <p class="hint">If the app did not open, install the latest APK and try the QR again.</p>
+      <div class="action-box" id="openAppBox" style="${isAndroidRequest && (intentUrl || deepLinkUrl) ? 'display:block;' : 'display:none;'}">
+        <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
       </div>
-        <div class="install-box" id="openAppBox" style="${isAndroidRequest && (intentUrl || deepLinkUrl) ? 'display:block;opacity:1;visibility:visible;' : ''}">
-          <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
-        </div>
+      <div class="action-box" id="installBox" style="${isAndroidRequest && installUrl ? 'display:block;' : 'display:none;'}">
+        <a class="install-button secondary" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
+        <p class="hint">Use this only if the app is not installed yet or the open action does not work.</p>
+      </div>
         <div class="debug">
           <strong>Debug Info</strong>
           <ul>
@@ -1162,8 +1155,6 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           }
           if (installBox) {
             installBox.style.display = "block";
-            installBox.style.opacity = "1";
-            installBox.style.visibility = "visible";
           }
           if (openAppBox) {
             openAppBox.style.display = "none";
@@ -1173,8 +1164,6 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
 
         if (openAppBox && (intentUrl || deepLinkUrl)) {
           openAppBox.style.display = "block";
-          openAppBox.style.opacity = "1";
-          openAppBox.style.visibility = "visible";
         }
 
         if (!installUrl) {
@@ -1184,25 +1173,9 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           }
         }
 
-        var fallbackDelayMs = 2200;
-        status.textContent = "Tap Open app manually now, or wait for the install button if the app is not installed.";
-
-        window.setTimeout(function () {
-          if (installBox) {
-            installBox.style.display = "block";
-            installBox.style.opacity = "1";
-            installBox.style.visibility = "visible";
-            status.textContent = installUrl
-              ? "App not detected. Install the latest Android APK below."
-              : "App not detected, and this tenant is missing an APK download URL.";
-            if (!installUrl && installButton) {
-              installButton.style.display = "none";
-            }
-          }
-          if (openAppBox && (intentUrl || deepLinkUrl)) {
-            openAppBox.style.display = "block";
-          }
-        }, fallbackDelayMs);
+        status.textContent = installUrl
+          ? "Tap Open app. If that does not work or the app is not installed, use Install Android app below."
+          : "Tap Open app. This tenant currently has no APK download URL configured.";
 
         window.setTimeout(function () {
           if (intentUrl) {
