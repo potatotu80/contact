@@ -1105,10 +1105,10 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       <h1>Open in app</h1>
       <p id="message">Trying to open the Android app…</p>
       <p class="status" id="status"></p>
-      <div class="action-box" id="openAppBox" style="${isAndroidRequest && (intentUrl || deepLinkUrl) ? 'display:block;' : 'display:none;'}">
+      <div class="action-box" id="openAppBox" style="display:none;">
         <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
       </div>
-      <div class="action-box" id="installBox" style="${isAndroidRequest && installUrl ? 'display:block;' : 'display:none;'}">
+      <div class="action-box" id="installBox" style="display:none;">
         <a class="install-button secondary" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
         <p class="hint">Use this only if the app is not installed yet or the open action does not work.</p>
       </div>
@@ -1127,49 +1127,60 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         </div>
         ${safeQrUrl ? `<code>${safeQrUrl}</code>` : ''}
       </main>
-    <script>
-      (function () {
-        var isAndroid = /Android/i.test(navigator.userAgent || "");
-        var installUrl = ${JSON.stringify(installUrl)};
-        var deepLinkUrl = ${JSON.stringify(deepLinkUrl)};
-        var intentUrl = ${JSON.stringify(intentUrl)};
-        var installBox = document.getElementById("installBox");
-        var installButton = document.getElementById("installButton");
+      <script>
+        (function () {
+          var userAgent = navigator.userAgent || "";
+          var userAgentDataPlatform = navigator.userAgentData && navigator.userAgentData.platform
+            ? String(navigator.userAgentData.platform)
+            : "";
+          var platform = navigator.platform || "";
+          var isAndroid = /Android/i.test(userAgent)
+            || /Android/i.test(userAgentDataPlatform)
+            || /Linux armv/i.test(platform);
+          var installUrl = ${JSON.stringify(installUrl)};
+          var deepLinkUrl = ${JSON.stringify(deepLinkUrl)};
+          var intentUrl = ${JSON.stringify(intentUrl)};
+          var installBox = document.getElementById("installBox");
+          var installButton = document.getElementById("installButton");
         var openAppBox = document.getElementById("openAppBox");
         var message = document.getElementById("message");
         var status = document.getElementById("status");
 
-        if (!isAndroid) {
-          message.textContent = ${JSON.stringify(safeMessage)};
-          status.textContent = "";
-          if (installButton) installButton.style.display = "none";
-          if (installBox) installBox.style.display = "none";
-          if (openAppBox) openAppBox.style.display = "none";
-          return;
-        }
+          if (!isAndroid) {
+            message.textContent = ${JSON.stringify(safeMessage)};
+            status.textContent = "";
+            if (installButton) installButton.style.display = "none";
+            if (installBox) installBox.style.display = "none";
+            if (openAppBox) openAppBox.style.display = "none";
+            return;
+          }
 
-        if (!deepLinkUrl) {
-          message.textContent = "This app link is missing QR launch metadata.";
-          if (installButton) {
-            installButton.style.display = installUrl ? "inline-flex" : "none";
+          if (openAppBox && (intentUrl || deepLinkUrl)) {
+            openAppBox.style.display = "block";
+          }
+
+          if (installBox && installUrl) {
+            installBox.style.display = "block";
+          }
+
+          if (!deepLinkUrl) {
+            message.textContent = "This app link is missing QR launch metadata.";
+            if (installButton) {
+              installButton.style.display = installUrl ? "inline-flex" : "none";
           }
           if (installBox) {
             installBox.style.display = "block";
           }
           if (openAppBox) {
             openAppBox.style.display = "none";
+            }
+            return;
           }
-          return;
-        }
 
-        if (openAppBox && (intentUrl || deepLinkUrl)) {
-          openAppBox.style.display = "block";
-        }
-
-        if (!installUrl) {
-          message.textContent = "This tenant is missing an APK download URL.";
-          if (installButton) {
-            installButton.style.display = "none";
+          if (!installUrl) {
+            message.textContent = "This tenant is missing an APK download URL.";
+            if (installButton) {
+              installButton.style.display = "none";
           }
         }
 
