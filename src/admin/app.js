@@ -1234,6 +1234,7 @@ const TenantColorPanel = () => {
   const isTenantScreen = slug === TENANT_UID;
   useTenantFormEnhancements({ slug, initialData, modifiedData, onChange });
   if (!isTenantScreen) return null;
+  if (!initialData?.id) return null;
 
   const primaryColor = normalizeHexColor(modifiedData?.primary_color || initialData?.primary_color || DEFAULT_TENANT_COLOR);
 
@@ -1271,28 +1272,7 @@ const TenantKeyPanel = () => {
   }, [initialData?.app_api_key, initialData?.id]);
 
   if (!isTenantScreen) return null;
-
-  if (!initialData?.id) {
-    return (
-      <Box
-        background="neutral0"
-        borderColor="neutral200"
-        hasRadius
-        padding={4}
-        shadow="tableShadow"
-      >
-        <Flex direction="column" gap={3}>
-          <Typography variant="pi" textColor="neutral600">
-            Tenant Security
-          </Typography>
-
-          <Typography variant="omega" textColor="neutral500">
-            The tenant API key will be generated automatically when you save this tenant for the first time.
-          </Typography>
-        </Flex>
-      </Box>
-    );
-  }
+  if (!initialData?.id) return null;
 
   const qrCodeUrl = String(modifiedData?.qr_code_url || initialData?.qr_code_url || '').trim();
   const apkUrl = String(modifiedData?.android_apk_url || initialData?.android_apk_url || '').trim();
