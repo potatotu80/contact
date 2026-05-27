@@ -1185,28 +1185,8 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         }
 
         status.textContent = installUrl
-          ? "Tap Open app. If that does not work or the app is not installed, use Install Android app below."
-          : "Tap Open app. This tenant currently has no APK download URL configured.";
-
-        window.setTimeout(function () {
-          if (intentUrl) {
-            window.location.assign(intentUrl);
-            return;
-          }
-
-          var iframe = document.createElement("iframe");
-          iframe.style.display = "none";
-          iframe.src = deepLinkUrl;
-          document.body.appendChild(iframe);
-
-          window.setTimeout(function () {
-            try {
-              document.body.removeChild(iframe);
-            } catch (error) {
-              // Ignore DOM cleanup issues for the fallback probe.
-            }
-          }, 1000);
-        }, 120);
+          ? "Tap Open app manually. If the app is not installed, use Install Android app below."
+          : "Tap Open app manually. This tenant currently has no APK download URL configured.";
       })();
     </script>
   </body>
