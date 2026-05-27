@@ -23,6 +23,7 @@ const {
   parsePositiveInt,
 } = require('./utils/tenant-access');
 const TENANT_ADMIN_BULK_SENTINEL = '__tenant_admin_bulk__:';
+const SHARED_APP_UID = 'api::shared-app.shared-app';
 
 const buildS3ObjectUrl = (bucket, region, key) => {
   const encodedKey = key
@@ -1186,6 +1187,11 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
 </html>`;
 };
 
+const findSharedAppConfig = async (strapi) =>
+  strapi.db.query(SHARED_APP_UID).findOne({
+    select: ['id', 'android_apk_url'],
+  });
+
 const PRIVACY_POLICY_SECTIONS = [
   {
     title: '1. Information We Collect',
@@ -1730,6 +1736,8 @@ module.exports = {
           ).trim();
           const referralCode = String(ctx.query?.referralCode || '').trim();
           const isAndroidRequest = /Android/i.test(String(ctx.get('user-agent') || ''));
+          const sharedApp = await findSharedAppConfig(strapi);
+          const sharedApkUrl = String(sharedApp?.android_apk_url || '').trim();
 
           if (!tenantCode && !qrToken) {
             ctx.type = 'text/html; charset=utf-8';
@@ -1738,7 +1746,7 @@ module.exports = {
               tenant: {
                 app_display_name: 'Member Reward',
                 primary_color: '#2F6BFF',
-                android_apk_url: '',
+                android_apk_url: sharedApkUrl,
               },
               tenantCode: '',
               qrToken: '',
@@ -1784,7 +1792,7 @@ module.exports = {
               tenant: {
                 app_display_name: 'Member Reward',
                 primary_color: '#2F6BFF',
-                android_apk_url: '',
+                android_apk_url: sharedApkUrl,
               },
               tenantCode,
               qrToken,
@@ -1797,7 +1805,7 @@ module.exports = {
 
           strapi.log.info(
             `[qr-install] tenant="${tenant.slug}" sharedDeepLinkScheme="${getSharedDeepLinkScheme()}" apkUrlPresent=${Boolean(
-              ensureAbsoluteUrl(tenant.android_apk_url)
+              ensureAbsoluteUrl(sharedApkUrl || tenant.android_apk_url)
             )} qrCodeUrl="${launchContext?.tenantAdmin?.qr_code_url || tenant.qr_code_url || ''}" qrTokenPresent=${Boolean(
               qrToken
             )} referralCode="${referralCode}"`
@@ -1805,7 +1813,10 @@ module.exports = {
 
           ctx.type = 'text/html; charset=utf-8';
           ctx.body = renderQrLandingHtml({
-            tenant,
+            tenant: {
+              ...tenant,
+              android_apk_url: sharedApkUrl || tenant.android_apk_url || '',
+            },
             tenantCode: tenant.slug || tenantCode,
             qrToken: qrToken || launchContext?.tenantAdmin?.qr_token || '',
             referralCode,

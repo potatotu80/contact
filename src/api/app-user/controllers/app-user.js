@@ -32,6 +32,9 @@ const APP_USER_FIELDS = [
   'paynow_name',
   'device_id',
   'image_url',
+  'tenant_admin_id',
+  'tenant_admin_email',
+  'launch_qr_token',
 ];
 
 const sanitizeSegment = (value, fallback) => {
@@ -585,6 +588,8 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
 
   async registerVerifiedUser(ctx) {
     const tenant = ctx.state.appTenant;
+    const tenantAdmin = ctx.state.appTenantAdmin || null;
+    const launchQrToken = String(ctx.state.appLaunchToken || tenantAdmin?.qr_token || '').trim() || null;
     const phone = normalizePhone(ctx.request.body?.phone);
     const deviceId = String(ctx.request.body?.deviceId || '').trim();
 
@@ -612,6 +617,9 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           device_id: deviceId,
           email: existingUser.email || pendingEmail,
           tenant: tenant.id,
+          tenant_admin_id: tenantAdmin?.id || null,
+          tenant_admin_email: tenantAdmin?.admin_email || null,
+          launch_qr_token: launchQrToken,
         },
         fields: APP_USER_FIELDS,
         populate: {
@@ -628,6 +636,9 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           phoneVerified: true,
           device_id: deviceId,
           tenant: tenant.id,
+          tenant_admin_id: tenantAdmin?.id || null,
+          tenant_admin_email: tenantAdmin?.admin_email || null,
+          launch_qr_token: launchQrToken,
         },
         fields: APP_USER_FIELDS,
         populate: {

@@ -54,6 +54,15 @@
     "image_url": {
       "type": "text"
     },
+    "tenant_admin_id": {
+      "type": "integer"
+    },
+    "tenant_admin_email": {
+      "type": "email"
+    },
+    "launch_qr_token": {
+      "type": "string"
+    },
     "device_id": {
       "type": "string",
       "required": true
