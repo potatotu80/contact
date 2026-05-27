@@ -1108,9 +1108,9 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       <div class="action-box" id="openAppBox" style="${(intentUrl || deepLinkUrl) ? 'display:block;' : 'display:none;'}">
         <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
       </div>
-      <div class="action-box" id="installBox" style="display:none;">
+      <div class="action-box" id="installBox" style="${installUrl ? 'display:block;' : 'display:none;'}">
         <a class="install-button secondary" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
-        <p class="hint">Use this only if the app is not installed yet or the open action does not work.</p>
+        <p class="hint">Need the app? Install Android app. Already installed? Use Open app manually.</p>
       </div>
         <div class="debug">
           <strong>Debug Info</strong>
