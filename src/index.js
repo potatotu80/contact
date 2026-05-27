@@ -1103,7 +1103,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
     <main class="card">
       <p class="eyebrow">${appName}</p>
       <h1>Open in app</h1>
-      <p id="message">Trying to open the Android app…</p>
+      <p id="message">Open the app if it is already installed, or install the latest Android app below.</p>
       <p class="status" id="status"></p>
       <div class="action-box" id="openAppBox" style="${(intentUrl || deepLinkUrl) ? 'display:block;' : 'display:none;'}">
         <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
@@ -1146,32 +1146,24 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         var message = document.getElementById("message");
         var status = document.getElementById("status");
 
-          if (!isAndroid) {
-            message.textContent = ${JSON.stringify(safeMessage)};
-            status.textContent = "";
-            if (installButton) installButton.style.display = "none";
-            if (installBox) installBox.style.display = "none";
-            return;
-          }
-
           if (openAppBox && (intentUrl || deepLinkUrl)) {
             openAppBox.style.display = "block";
           }
 
-          if (installBox && installUrl) {
-            installBox.style.display = "block";
+          if (installBox) {
+            installBox.style.display = installUrl ? "block" : "none";
           }
 
           if (!deepLinkUrl) {
             message.textContent = "This app link is missing QR launch metadata.";
             if (installButton) {
               installButton.style.display = installUrl ? "inline-flex" : "none";
-          }
-          if (installBox) {
-            installBox.style.display = "block";
-          }
-          if (openAppBox) {
-            openAppBox.style.display = "none";
+            }
+            if (installBox) {
+              installBox.style.display = installUrl ? "block" : "none";
+            }
+            if (openAppBox) {
+              openAppBox.style.display = "none";
             }
             return;
           }
@@ -1180,12 +1172,16 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
             message.textContent = "This tenant is missing an APK download URL.";
             if (installButton) {
               installButton.style.display = "none";
+            }
           }
-        }
 
-        status.textContent = installUrl
-          ? "Tap Open app manually. If the app is not installed, use Install Android app below."
-          : "Tap Open app manually. This tenant currently has no APK download URL configured.";
+          if (!isAndroid) {
+            message.textContent = ${JSON.stringify(safeMessage)};
+          }
+
+          status.textContent = installUrl
+            ? "Already installed? Tap Open app manually. Need the app? Tap Install Android app."
+            : "Tap Open app manually. This tenant currently has no APK download URL configured.";
       })();
     </script>
   </body>
