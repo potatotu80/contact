@@ -1105,7 +1105,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       <h1>Open in app</h1>
       <p id="message">Trying to open the Android app…</p>
       <p class="status" id="status"></p>
-      <div class="action-box" id="openAppBox" style="display:none;">
+      <div class="action-box" id="openAppBox" style="${(intentUrl || deepLinkUrl) ? 'display:block;' : 'display:none;'}">
         <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
       </div>
       <div class="action-box" id="installBox" style="display:none;">
@@ -1151,7 +1151,6 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
             status.textContent = "";
             if (installButton) installButton.style.display = "none";
             if (installBox) installBox.style.display = "none";
-            if (openAppBox) openAppBox.style.display = "none";
             return;
           }
 
