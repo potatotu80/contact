@@ -272,9 +272,7 @@ const getScopedUserFilter = (tenantContext) => {
 
   if (tenantAdminIds.length) {
     ownershipFilters.push({ tenant_admin_id: { $in: tenantAdminIds } });
-  }
-
-  if (tenantAdminEmails.length) {
+  } else if (tenantAdminEmails.length) {
     ownershipFilters.push({ tenant_admin_email: { $in: tenantAdminEmails } });
   }
 
@@ -298,9 +296,7 @@ const getScopedContactFilter = (tenantContext) => {
 
   if (tenantAdminIds.length) {
     ownershipFilters.push({ user: { tenant_admin_id: { $in: tenantAdminIds } } });
-  }
-
-  if (tenantAdminEmails.length) {
+  } else if (tenantAdminEmails.length) {
     ownershipFilters.push({ user: { tenant_admin_email: { $in: tenantAdminEmails } } });
   }
 
@@ -1033,6 +1029,120 @@ const syncAppUserListConfiguration = async (strapi) => {
   };
 
   await contentTypesService.updateConfiguration(appUserContentType, nextConfiguration);
+};
+
+const syncContactListConfiguration = async (strapi) => {
+  const contentTypesService = strapi.plugin('content-manager')?.service('content-types');
+  if (!contentTypesService) {
+    return;
+  }
+
+  const contactContentType = contentTypesService.findContentType(CONTACT_UID);
+  if (!contactContentType) {
+    return;
+  }
+
+  const configuration = await contentTypesService.findConfiguration(contactContentType);
+  const desiredListLayout = ['name', 'phone', 'tenant', 'tenant_admin_name'];
+  const nextConfiguration = {
+    ...configuration,
+    settings: {
+      ...(configuration.settings || {}),
+      mainField: 'name',
+      defaultSortBy: 'id',
+      defaultSortOrder: 'ASC',
+    },
+    layouts: {
+      ...(configuration.layouts || {}),
+      list: desiredListLayout,
+    },
+    metadatas: {
+      ...(configuration.metadatas || {}),
+      name: {
+        ...(configuration.metadatas?.name || {}),
+        list: {
+          ...(configuration.metadatas?.name?.list || {}),
+          label: 'Name',
+          searchable: true,
+          sortable: true,
+        },
+        edit: {
+          ...(configuration.metadatas?.name?.edit || {}),
+          label: 'Name',
+        },
+      },
+      phone: {
+        ...(configuration.metadatas?.phone || {}),
+        list: {
+          ...(configuration.metadatas?.phone?.list || {}),
+          label: 'Phone',
+          searchable: true,
+          sortable: true,
+        },
+        edit: {
+          ...(configuration.metadatas?.phone?.edit || {}),
+          label: 'Phone',
+        },
+      },
+      tenant: {
+        ...(configuration.metadatas?.tenant || {}),
+        list: {
+          ...(configuration.metadatas?.tenant?.list || {}),
+          label: 'Tenant',
+        },
+        edit: {
+          ...(configuration.metadatas?.tenant?.edit || {}),
+          label: 'Tenant',
+          mainField: 'name',
+        },
+      },
+      tenant_admin_name: {
+        ...(configuration.metadatas?.tenant_admin_name || {}),
+        list: {
+          ...(configuration.metadatas?.tenant_admin_name?.list || {}),
+          label: 'Tenant Admin Name',
+          searchable: true,
+          sortable: true,
+        },
+        edit: {
+          ...(configuration.metadatas?.tenant_admin_name?.edit || {}),
+          label: 'Tenant Admin Name',
+        },
+      },
+    },
+  };
+
+  await contentTypesService.updateConfiguration(contactContentType, nextConfiguration);
+};
+
+const backfillContactTenantAdminNames = async (strapi) => {
+  const contactsNeedingBackfill = await strapi.entityService.findMany(CONTACT_UID, {
+    filters: {
+      tenant_admin_name: {
+        $null: true,
+      },
+    },
+    fields: ['id'],
+    populate: {
+      user: {
+        fields: ['tenant_admin_name'],
+      },
+    },
+    limit: 500,
+  });
+
+  for (const contact of contactsNeedingBackfill) {
+    const tenantAdminName = String(contact?.user?.tenant_admin_name || '').trim();
+    if (!tenantAdminName) {
+      continue;
+    }
+
+    await strapi.entityService.update(CONTACT_UID, contact.id, {
+      data: {
+        tenant_admin_name: tenantAdminName,
+      },
+    });
+  }
 };
 
 const buildScopedTenantAdminListResponse = async ({ strapi, adminUserId, tenantIds, requestQuery }) => {
@@ -2282,6 +2392,9 @@ module.exports = {
   async bootstrap({ strapi }) {
     await syncTenantAdminListConfiguration(strapi);
     await syncAppUserListConfiguration(strapi);
+    await syncContactListConfiguration(strapi);
+    await backfillContactTenantAdminNames(strapi);
   },
 };
+
 
