@@ -1509,32 +1509,6 @@ const BulkClearActions = () => {
   );
 };
 
-const DefaultTenantListSort = () => {
-  const match = useRouteMatch('/content-manager/collectionType/:slug');
-  const slug = match?.params?.slug;
-
-  useEffect(() => {
-    if (slug !== TENANT_UID) {
-      return;
-    }
-
-    const url = new URL(window.location.href);
-    const currentSort = url.searchParams.get('sort');
-    if (currentSort && currentSort.toLowerCase() !== 'name:asc') {
-      return;
-    }
-
-    if (currentSort?.toLowerCase() === 'id:asc') {
-      return;
-    }
-
-    url.searchParams.set('sort', 'id:asc');
-    window.location.replace(url.toString());
-  }, [slug]);
-
-  return null;
-};
-
 const TenantAdminQrListCopyButtons = () => {
   const match = useRouteMatch('/content-manager/collectionType/:slug');
   const slug = match?.params?.slug;
@@ -1568,7 +1542,7 @@ const TenantAdminQrListCopyButtons = () => {
     const buildButton = (value) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = 'Copy';
+      button.textContent = 'Copy QR URL';
       button.dataset.qrCopyButton = 'true';
       button.style.marginLeft = '12px';
       button.style.padding = '4px 10px';
@@ -1624,8 +1598,11 @@ const TenantAdminQrListCopyButtons = () => {
           wrapper.style.width = '100%';
 
           const text = document.createElement('span');
-          text.textContent = urlText;
+          text.textContent = 'Ready';
           text.style.overflow = 'hidden';
+          text.style.color = '#666687';
+          text.style.fontSize = '12px';
+          text.style.fontWeight = '600';
           text.style.textOverflow = 'ellipsis';
           text.style.whiteSpace = 'nowrap';
           text.style.display = 'block';
@@ -1787,11 +1764,6 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('listView', 'actions', {
     name: 'bulk-clear-actions',
     Component: BulkClearActions,
-  });
-
-  app.injectContentManagerComponent('listView', 'actions', {
-    name: 'default-tenant-list-sort',
-    Component: DefaultTenantListSort,
   });
 
   app.injectContentManagerComponent('listView', 'actions', {

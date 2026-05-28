@@ -78,5 +78,48 @@
     "support_email": {
       "type": "email"
     }
+  },
+  "config": {
+    "settings": {
+      "bulkable": true,
+      "filterable": true,
+      "pageSize": 10,
+      "searchable": true,
+      "mainField": "name",
+      "defaultSortBy": "id",
+      "defaultSortOrder": "ASC"
+    },
+    "metadatas": {
+      "name": {
+        "list": {
+          "label": "Name",
+          "searchable": true,
+          "sortable": true
+        },
+        "edit": {
+          "label": "Name"
+        }
+      },
+      "slug": {
+        "list": {
+          "label": "Slug",
+          "searchable": true,
+          "sortable": true
+        },
+        "edit": {
+          "label": "Slug"
+        }
+      },
+      "status": {
+        "list": {
+          "label": "Status",
+          "searchable": false,
+          "sortable": true
+        },
+        "edit": {
+          "label": "Status"
+        }
+      }
+    }
   }
 }
