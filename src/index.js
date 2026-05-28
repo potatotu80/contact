@@ -14,8 +14,6 @@ const {
   APP_TENANT_UID,
   APP_USER_UID,
   CONTACT_UID,
-  assertTenantScopeForContact,
-  assertTenantScopeForUser,
   buildTenantUserImagePrefix,
   findTenantLaunchByQrToken,
   getAdminTenantContext,
@@ -233,8 +231,10 @@ const stripManagedTenantFields = (ctx, slug) => {
   }
 };
 
-const withAdminTenantFilter = (ctx, tenantIds) => {
-  const tenantFilter = getTenantIdsFilter(tenantIds);
+const withAdminTenantFilter = (ctx, filterOrTenantIds) => {
+  const tenantFilter = Array.isArray(filterOrTenantIds)
+    ? getTenantIdsFilter(filterOrTenantIds)
+    : filterOrTenantIds;
   const existingFilters = ctx.query?.filters || ctx.request?.query?.filters;
 
   if (!existingFilters || Object.keys(existingFilters).length === 0) {
@@ -256,6 +256,128 @@ const withAdminTenantFilter = (ctx, tenantIds) => {
 
   ctx.query.filters = combinedFilters;
   ctx.request.query.filters = combinedFilters;
+};
+
+const normalizeDistinctStrings = (values) => [...new Set(
+  (Array.isArray(values) ? values : [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+)];
+
+const getScopedUserFilter = (tenantContext) => {
+  const tenantIds = Array.isArray(tenantContext?.tenantIds) ? tenantContext.tenantIds : [];
+  const tenantAdminIds = Array.isArray(tenantContext?.tenantAdminIds) ? tenantContext.tenantAdminIds : [];
+  const tenantAdminEmails = normalizeDistinctStrings(tenantContext?.tenantAdminEmails).map((value) => value.toLowerCase());
+  const ownershipFilters = [];
+
+  if (tenantAdminIds.length) {
+    ownershipFilters.push({ tenant_admin_id: { $in: tenantAdminIds } });
+  }
+
+  if (tenantAdminEmails.length) {
+    ownershipFilters.push({ tenant_admin_email: { $in: tenantAdminEmails } });
+  }
+
+  if (!ownershipFilters.length) {
+    return getTenantIdsFilter(tenantIds);
+  }
+
+  return {
+    $and: [
+      getTenantIdsFilter(tenantIds),
+      ownershipFilters.length === 1 ? ownershipFilters[0] : { $or: ownershipFilters },
+    ],
+  };
+};
+
+const getScopedContactFilter = (tenantContext) => {
+  const tenantIds = Array.isArray(tenantContext?.tenantIds) ? tenantContext.tenantIds : [];
+  const tenantAdminIds = Array.isArray(tenantContext?.tenantAdminIds) ? tenantContext.tenantAdminIds : [];
+  const tenantAdminEmails = normalizeDistinctStrings(tenantContext?.tenantAdminEmails).map((value) => value.toLowerCase());
+  const ownershipFilters = [];
+
+  if (tenantAdminIds.length) {
+    ownershipFilters.push({ user: { tenant_admin_id: { $in: tenantAdminIds } } });
+  }
+
+  if (tenantAdminEmails.length) {
+    ownershipFilters.push({ user: { tenant_admin_email: { $in: tenantAdminEmails } } });
+  }
+
+  if (!ownershipFilters.length) {
+    return getTenantIdsFilter(tenantIds);
+  }
+
+  return {
+    $and: [
+      getTenantIdsFilter(tenantIds),
+      ownershipFilters.length === 1 ? ownershipFilters[0] : { $or: ownershipFilters },
+    ],
+  };
+};
+
+const getScopedAdminListFilter = (tenantContext, model) => {
+  if (model === APP_USER_UID) {
+    return getScopedUserFilter(tenantContext);
+  }
+
+  if (model === CONTACT_UID) {
+    return getScopedContactFilter(tenantContext);
+  }
+
+  return getTenantIdsFilter(tenantContext?.tenantIds || []);
+};
+
+const assertScopedAdminRecord = async (strapi, tenantContext, model, entityId) => {
+  const parsedEntityId = parsePositiveInt(entityId);
+  if (!parsedEntityId) {
+    return null;
+  }
+
+  if (model === APP_USER_UID) {
+    const users = await strapi.entityService.findMany(APP_USER_UID, {
+      filters: {
+        $and: [
+          { id: { $eq: parsedEntityId } },
+          getScopedUserFilter(tenantContext),
+        ],
+      },
+      fields: ['id', 'tenant_admin_id', 'tenant_admin_email', 'tenant_admin_name'],
+      populate: {
+        tenant: {
+          fields: ['id', 'slug', 'name'],
+        },
+      },
+      limit: 1,
+    });
+
+    return users[0] || null;
+  }
+
+  if (model === CONTACT_UID) {
+    const contacts = await strapi.entityService.findMany(CONTACT_UID, {
+      filters: {
+        $and: [
+          { id: { $eq: parsedEntityId } },
+          getScopedContactFilter(tenantContext),
+        ],
+      },
+      fields: ['id'],
+      populate: {
+        tenant: {
+          fields: ['id', 'slug', 'name'],
+        },
+        user: {
+          fields: ['id', 'tenant_admin_id', 'tenant_admin_email', 'tenant_admin_name'],
+        },
+      },
+      limit: 1,
+    });
+
+    return contacts[0] || null;
+  }
+
+  return null;
 };
 
 const enforceTenantOnAdminBody = (ctx, tenantContext, slug) => {
@@ -464,9 +586,9 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
     const mergedFilters =
       permissionQuery.filters && Object.keys(permissionQuery.filters).length
         ? {
-            $and: [permissionQuery.filters, getTenantIdsFilter(tenantContext.tenantIds)],
+            $and: [permissionQuery.filters, getScopedAdminListFilter(tenantContext, model)],
           }
-        : getTenantIdsFilter(tenantContext.tenantIds);
+        : getScopedAdminListFilter(tenantContext, model);
 
     const { results, pagination } = await entityManager.findPage(
       {
@@ -560,16 +682,10 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       return;
     }
 
-    const allowed = await Promise.all(
-      tenantContext.tenantIds.map((tenantId) =>
-        model === APP_USER_UID
-          ? assertTenantScopeForUser(strapi, tenantId, entityId)
-          : assertTenantScopeForContact(strapi, tenantId, entityId)
-      )
-    );
+    const scopedEntity = await assertScopedAdminRecord(strapi, tenantContext, model, entityId);
 
-    if (!allowed.some(Boolean)) {
-      return ctx.forbidden('This record is outside your tenants.');
+    if (!scopedEntity) {
+      return ctx.forbidden('This record is outside your tenant admin scope.');
     }
 
     const { userAbility } = ctx.state;
@@ -645,17 +761,9 @@ const attachTenantScopedRelationControllers = (strapi) => {
       return ctx.badRequest('Entry id must be a valid number.');
     }
 
-    const allowed = await Promise.all(
-      tenantContext.tenantIds.map((tenantId) =>
-        model === APP_USER_UID
-          ? assertTenantScopeForUser(strapi, tenantId, entityId)
-          : assertTenantScopeForContact(strapi, tenantId, entityId)
-      )
-    );
-
-    const entity = allowed.find(Boolean);
+    const entity = await assertScopedAdminRecord(strapi, tenantContext, model, entityId);
     if (!entity) {
-      return ctx.forbidden('This record is outside your tenants.');
+      return ctx.forbidden('This record is outside your tenant admin scope.');
     }
 
     const tenant = entity.tenant || null;
@@ -1580,17 +1688,9 @@ module.exports = {
           return ctx.badRequest('Entry id must be a valid number.');
         }
 
-        const allowed = await Promise.all(
-          tenantContext.tenantIds.map((tenantId) =>
-            model === APP_USER_UID
-              ? assertTenantScopeForUser(strapi, tenantId, entityId)
-              : assertTenantScopeForContact(strapi, tenantId, entityId)
-          )
-        );
-
-        const scopedEntity = allowed.find(Boolean);
+        const scopedEntity = await assertScopedAdminRecord(strapi, tenantContext, model, entityId);
         if (!scopedEntity) {
-          return ctx.forbidden('This record is outside your tenants.');
+          return ctx.forbidden('This record is outside your tenant admin scope.');
         }
 
         const tenant = scopedEntity.tenant || null;
@@ -1719,7 +1819,7 @@ module.exports = {
         const entityId = getContentManagerEntityId(ctx.request.path || '');
 
         if (ctx.method === 'GET' && !entityId) {
-          withAdminTenantFilter(ctx, tenantContext.tenantIds);
+          withAdminTenantFilter(ctx, getScopedAdminListFilter(tenantContext, slug));
           return next();
         }
 
@@ -1751,16 +1851,10 @@ module.exports = {
       }
 
       if (entityId && (ctx.method === 'GET' || ctx.method === 'DELETE' || ctx.method === 'PUT')) {
-        const allowed = await Promise.all(
-          tenantContext.tenantIds.map((tenantId) =>
-            slug === APP_USER_UID
-              ? assertTenantScopeForUser(strapi, tenantId, entityId)
-              : assertTenantScopeForContact(strapi, tenantId, entityId)
-          )
-        );
+        const scopedEntity = await assertScopedAdminRecord(strapi, tenantContext, slug, entityId);
 
-        if (!allowed.some(Boolean)) {
-          return ctx.forbidden('This record is outside your tenants.');
+        if (!scopedEntity) {
+          return ctx.forbidden('This record is outside your tenant admin scope.');
         }
       }
 
@@ -2115,10 +2209,7 @@ module.exports = {
                 },
               });
             } else {
-              const allowedUsers = await Promise.all(
-                tenantContext.tenantIds.map((tenantId) => assertTenantScopeForUser(strapi, tenantId, userId))
-              );
-              user = allowedUsers.find(Boolean) || null;
+              user = await assertScopedAdminRecord(strapi, tenantContext, APP_USER_UID, userId);
             }
 
             if (!user) {
@@ -2193,3 +2284,4 @@ module.exports = {
     await syncAppUserListConfiguration(strapi);
   },
 };
+

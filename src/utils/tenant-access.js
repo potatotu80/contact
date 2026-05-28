@@ -106,6 +106,10 @@ const getAdminTenantContext = async (strapi, adminUser) => {
       isAdmin: false,
       isSuperAdmin: false,
       tenantIds: [],
+      tenantAdminIds: [],
+      tenantAdminEmails: [],
+      tenantAdminNames: [],
+      adminEmail: null,
       tenants: [],
     };
   }
@@ -120,6 +124,10 @@ const getAdminTenantContext = async (strapi, adminUser) => {
       isAdmin: true,
       isSuperAdmin: true,
       tenantIds: [],
+      tenantAdminIds: [],
+      tenantAdminEmails: [],
+      tenantAdminNames: [],
+      adminEmail: String(resolvedAdminUser.email || '').trim().toLowerCase() || null,
       tenants: [],
     };
   }
@@ -135,7 +143,7 @@ const getAdminTenantContext = async (strapi, adminUser) => {
         fields: ['id', 'name', 'slug'],
       },
     },
-    fields: ['id', 'admin_user_id'],
+    fields: ['id', 'admin_user_id', 'admin_email', 'tenant_name'],
     limit: 100,
   });
 
@@ -143,10 +151,28 @@ const getAdminTenantContext = async (strapi, adminUser) => {
     .map((entry) => entry.tenant)
     .filter(Boolean);
 
+  const tenantAdminIds = tenantAdmins
+    .map((entry) => parsePositiveInt(entry.id))
+    .filter(Boolean);
+  const tenantAdminEmails = [...new Set(
+    tenantAdmins
+      .map((entry) => String(entry.admin_email || '').trim().toLowerCase())
+      .filter(Boolean)
+  )];
+  const tenantAdminNames = [...new Set(
+    tenantAdmins
+      .map((entry) => String(entry.tenant_name || '').trim())
+      .filter(Boolean)
+  )];
+
   return {
     isAdmin: true,
     isSuperAdmin: false,
     tenantIds: tenants.map((tenant) => tenant.id),
+    tenantAdminIds,
+    tenantAdminEmails,
+    tenantAdminNames,
+    adminEmail: String(resolvedAdminUser.email || '').trim().toLowerCase() || null,
     tenants,
   };
 };
@@ -298,3 +324,4 @@ module.exports = {
   getUserTenantId,
   parsePositiveInt,
 };
+
