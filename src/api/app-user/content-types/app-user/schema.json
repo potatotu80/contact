@@ -66,6 +66,80 @@
     "device_id": {
       "type": "string",
       "required": true
+    },
+    "tenant_admin_name": {
+      "type": "string"
+    }
+  },
+  "config": {
+    "settings": {
+      "bulkable": true,
+      "filterable": true,
+      "pageSize": 10,
+      "searchable": true,
+      "mainField": "email",
+      "defaultSortBy": "id",
+      "defaultSortOrder": "ASC"
+    },
+    "layouts": {
+      "list": [
+        "email",
+        "device_id",
+        "phone",
+        "tenant",
+        "tenant_admin_name"
+      ]
+    },
+    "metadatas": {
+      "email": {
+        "list": {
+          "label": "Email",
+          "searchable": true,
+          "sortable": true
+        },
+        "edit": {
+          "label": "Email"
+        }
+      },
+      "device_id": {
+        "list": {
+          "label": "Device ID",
+          "searchable": true,
+          "sortable": true
+        },
+        "edit": {
+          "label": "Device ID"
+        }
+      },
+      "phone": {
+        "list": {
+          "label": "Phone",
+          "searchable": true,
+          "sortable": true
+        },
+        "edit": {
+          "label": "Phone"
+        }
+      },
+      "tenant": {
+        "list": {
+          "label": "Tenant"
+        },
+        "edit": {
+          "label": "Tenant",
+          "mainField": "name"
+        }
+      },
+      "tenant_admin_name": {
+        "list": {
+          "label": "Tenant Admin Name",
+          "searchable": true,
+          "sortable": true
+        },
+        "edit": {
+          "label": "Tenant Admin Name"
+        }
+      }
     }
   }
 }

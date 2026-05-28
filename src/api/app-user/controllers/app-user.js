@@ -34,6 +34,7 @@ const APP_USER_FIELDS = [
   'image_url',
   'tenant_admin_id',
   'tenant_admin_email',
+  'tenant_admin_name',
   'launch_qr_token',
 ];
 
@@ -619,6 +620,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           tenant: tenant.id,
           tenant_admin_id: tenantAdmin?.id || null,
           tenant_admin_email: tenantAdmin?.admin_email || null,
+          tenant_admin_name: tenantAdmin?.tenant_name || tenantAdmin?.admin_email || null,
           launch_qr_token: launchQrToken,
         },
         fields: APP_USER_FIELDS,
@@ -638,6 +640,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           tenant: tenant.id,
           tenant_admin_id: tenantAdmin?.id || null,
           tenant_admin_email: tenantAdmin?.admin_email || null,
+          tenant_admin_name: tenantAdmin?.tenant_name || tenantAdmin?.admin_email || null,
           launch_qr_token: launchQrToken,
         },
         fields: APP_USER_FIELDS,
