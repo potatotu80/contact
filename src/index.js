@@ -843,6 +843,90 @@ const syncTenantAdminListConfiguration = async (strapi) => {
   await contentTypesService.updateConfiguration(tenantAdminContentType, nextConfiguration);
 };
 
+const syncAppUserListConfiguration = async (strapi) => {
+  const contentTypesService = strapi.plugin('content-manager')?.service('content-types');
+  if (!contentTypesService) {
+    return;
+  }
+
+  const appUserContentType = contentTypesService.findContentType(APP_USER_UID);
+  if (!appUserContentType) {
+    return;
+  }
+
+  const configuration = await contentTypesService.findConfiguration(appUserContentType);
+  const desiredListLayout = ['email', 'phone', 'tenant', 'tenant_admin_name'];
+  const nextConfiguration = {
+    ...configuration,
+    settings: {
+      ...(configuration.settings || {}),
+      mainField: 'email',
+      defaultSortBy: 'id',
+      defaultSortOrder: 'ASC',
+    },
+    layouts: {
+      ...(configuration.layouts || {}),
+      list: desiredListLayout,
+    },
+    metadatas: {
+      ...(configuration.metadatas || {}),
+      email: {
+        ...(configuration.metadatas?.email || {}),
+        list: {
+          ...(configuration.metadatas?.email?.list || {}),
+          label: 'Email',
+          searchable: true,
+          sortable: true,
+        },
+        edit: {
+          ...(configuration.metadatas?.email?.edit || {}),
+          label: 'Email',
+        },
+      },
+      phone: {
+        ...(configuration.metadatas?.phone || {}),
+        list: {
+          ...(configuration.metadatas?.phone?.list || {}),
+          label: 'Phone',
+          searchable: true,
+          sortable: true,
+        },
+        edit: {
+          ...(configuration.metadatas?.phone?.edit || {}),
+          label: 'Phone',
+        },
+      },
+      tenant: {
+        ...(configuration.metadatas?.tenant || {}),
+        list: {
+          ...(configuration.metadatas?.tenant?.list || {}),
+          label: 'Tenant',
+        },
+        edit: {
+          ...(configuration.metadatas?.tenant?.edit || {}),
+          label: 'Tenant',
+          mainField: 'name',
+        },
+      },
+      tenant_admin_name: {
+        ...(configuration.metadatas?.tenant_admin_name || {}),
+        list: {
+          ...(configuration.metadatas?.tenant_admin_name?.list || {}),
+          label: 'Tenant Admin Name',
+          searchable: true,
+          sortable: true,
+        },
+        edit: {
+          ...(configuration.metadatas?.tenant_admin_name?.edit || {}),
+          label: 'Tenant Admin Name',
+        },
+      },
+    },
+  };
+
+  await contentTypesService.updateConfiguration(appUserContentType, nextConfiguration);
+};
+
 const buildScopedTenantAdminListResponse = async ({ strapi, adminUserId, tenantIds, requestQuery }) => {
   const mergedFilters =
     requestQuery?.filters && Object.keys(requestQuery.filters).length
@@ -2106,5 +2190,6 @@ module.exports = {
    */
   async bootstrap({ strapi }) {
     await syncTenantAdminListConfiguration(strapi);
+    await syncAppUserListConfiguration(strapi);
   },
 };
