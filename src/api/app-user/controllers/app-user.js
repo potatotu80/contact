@@ -216,6 +216,19 @@ const extractTelnyxErrorMessage = (payload, fallbackMessage) => {
   return fallbackMessage;
 };
 
+const mapTelnyxVerifyFailureMessage = (responseCode) => {
+  switch (String(responseCode || '').trim().toLowerCase()) {
+    case 'rejected':
+      return 'Incorrect OTP code.';
+    case 'expired':
+      return 'OTP code expired. Please request a new code.';
+    case 'max_attempts_exceeded':
+      return 'Too many incorrect OTP attempts. Please request a new code.';
+    default:
+      return 'Invalid OTP verification result.';
+  }
+};
+
 const buildPendingEmail = (phone, deviceId, tenant) => {
   const phonePart = sanitizeForEmailLocalPart(phone.replace(/^\+/, ''), 'phone');
   const devicePart = sanitizeForEmailLocalPart(deviceId, 'device');
@@ -573,23 +586,28 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
 
     const payload = response.json || {};
     const approved = response.ok && payload?.data?.response_code === 'accepted';
+    const verifyResponseCode = payload?.data?.response_code || null;
 
     await recordAttempt(strapi, {
       phone,
       action: 'verify',
       successful: approved,
-      status: payload?.data?.response_code || String(response.status),
+      status: verifyResponseCode || String(response.status),
     });
 
     if (!approved) {
-      return ctx.badRequest(extractTelnyxErrorMessage(payload, 'Invalid or expired OTP code.'));
+      const telnyxMessage = response.ok
+        ? mapTelnyxVerifyFailureMessage(verifyResponseCode)
+        : extractTelnyxErrorMessage(payload, 'Unable to verify OTP.');
+
+      return ctx.badRequest(telnyxMessage);
     }
 
     ctx.body = {
       data: {
         phone,
         phoneVerified: true,
-        status: payload?.data?.response_code || 'accepted',
+        status: verifyResponseCode || 'accepted',
       },
     };
   },
