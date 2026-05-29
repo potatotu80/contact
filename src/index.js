@@ -1407,7 +1407,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       <div class="action-box" id="openAppBox" style="${(intentUrl || deepLinkUrl) ? 'display:block;' : 'display:none;'}">
         <a class="install-button" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app manually</a>
       </div>
-      <div class="action-box" id="installBox" style="${installUrl ? 'display:block;' : 'display:none;'}">
+      <div class="action-box" id="installBox" style="display:none;">
         <a class="install-button secondary" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
         <p class="hint">Need the app? Install Android app. Already installed? Use Open app manually.</p>
       </div>
@@ -1441,26 +1441,28 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           var intentUrl = ${JSON.stringify(intentUrl)};
           var installBox = document.getElementById("installBox");
           var installButton = document.getElementById("installButton");
-        var openAppBox = document.getElementById("openAppBox");
-        var message = document.getElementById("message");
-        var status = document.getElementById("status");
+          var openAppBox = document.getElementById("openAppBox");
+          var message = document.getElementById("message");
+          var status = document.getElementById("status");
+          var hasLeftPage = false;
+          var fallbackDelayMs = 2000;
+
+          var showInstallFallback = function () {
+            if (installBox) {
+              installBox.style.display = installUrl ? "block" : "none";
+            }
+            if (installButton) {
+              installButton.style.display = installUrl ? "inline-flex" : "none";
+            }
+          };
 
           if (openAppBox && (intentUrl || deepLinkUrl)) {
             openAppBox.style.display = "block";
           }
 
-          if (installBox) {
-            installBox.style.display = installUrl ? "block" : "none";
-          }
-
           if (!deepLinkUrl) {
             message.textContent = "This app link is missing QR launch metadata.";
-            if (installButton) {
-              installButton.style.display = installUrl ? "inline-flex" : "none";
-            }
-            if (installBox) {
-              installBox.style.display = installUrl ? "block" : "none";
-            }
+            showInstallFallback();
             if (openAppBox) {
               openAppBox.style.display = "none";
             }
@@ -1479,8 +1481,34 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           }
 
           status.textContent = installUrl
-            ? "Already installed? Tap Open app manually. Need the app? Tap Install Android app."
-            : "Tap Open app manually. This tenant currently has no APK download URL configured.";
+            ? "Trying to open the app now. If it stays on this page, use Open app manually or install the app below."
+            : "Trying to open the app now. This tenant currently has no APK download URL configured.";
+
+          document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "hidden") {
+              hasLeftPage = true;
+            }
+          });
+
+          window.addEventListener("pagehide", function () {
+            hasLeftPage = true;
+          });
+
+          if (isAndroid && (intentUrl || deepLinkUrl)) {
+            window.setTimeout(function () {
+              try {
+                window.location.href = intentUrl || deepLinkUrl;
+              } catch (error) {
+                // ignore browser deep-link failures and let the fallback appear
+              }
+            }, 150);
+          }
+
+          window.setTimeout(function () {
+            if (!hasLeftPage) {
+              showInstallFallback();
+            }
+          }, fallbackDelayMs);
       })();
     </script>
   </body>
