@@ -1235,9 +1235,13 @@ const ReadOnlyField = ({ label, value, monospace = false }) => (
 
 const AppUserSelfiePreview = () => {
   const { slug, initialData, modifiedData } = useCMEditViewDataManager();
+  const { get } = useFetchClient();
+  const toggleNotification = useNotification();
   const [mountNode, setMountNode] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
   const isAppUser = slug === APP_USER_UID;
   const selfieUrl = String(modifiedData?.image_url || initialData?.image_url || '').trim();
+  const userId = initialData?.id;
 
   useEffect(() => {
     if (!isAppUser) {
@@ -1281,6 +1285,38 @@ const AppUserSelfiePreview = () => {
     };
   }, [isAppUser, initialData?.id]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPreview = async () => {
+      if (!isAppUser || !userId || !selfieUrl) {
+        setPreviewUrl('');
+        return;
+      }
+
+      try {
+        const response = await get(`/app-user-selfie/${userId}`);
+        if (!isMounted) return;
+
+        setPreviewUrl(String(response?.data?.data?.signedUrl || selfieUrl).trim());
+      } catch (error) {
+        if (!isMounted) return;
+
+        setPreviewUrl(selfieUrl);
+        toggleNotification({
+          type: 'warning',
+          message: 'Failed to load signed selfie preview. Falling back to the stored URL.',
+        });
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [get, isAppUser, selfieUrl, toggleNotification, userId]);
+
   if (!isAppUser || !mountNode) {
     return null;
   }
@@ -1302,7 +1338,7 @@ const AppUserSelfiePreview = () => {
         Selfie
       </Typography>
 
-      {selfieUrl ? (
+      {previewUrl || selfieUrl ? (
         <>
           <Box
             style={{
@@ -1314,7 +1350,7 @@ const AppUserSelfiePreview = () => {
             }}
           >
             <img
-              src={selfieUrl}
+              src={previewUrl || selfieUrl}
               alt="User selfie"
               style={{
                 display: 'block',
@@ -1326,7 +1362,7 @@ const AppUserSelfiePreview = () => {
             />
           </Box>
           <a
-            href={selfieUrl}
+            href={previewUrl || selfieUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={{

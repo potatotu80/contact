@@ -7,6 +7,7 @@ const { generateTenantApiKey } = require('./utils/tenant-api-key');
 const {
   buildObjectStoragePublicUrl,
   createObjectStorageClient,
+  extractObjectStorageKeyFromUrl,
   getObjectStorageConfig,
 } = require('./utils/object-storage');
 const {
@@ -334,7 +335,7 @@ const assertScopedAdminRecord = async (strapi, tenantContext, model, entityId) =
           getScopedUserFilter(tenantContext),
         ],
       },
-      fields: ['id', 'tenant_admin_id', 'tenant_admin_email', 'tenant_admin_name'],
+      fields: ['id', 'image_url', 'tenant_admin_id', 'tenant_admin_email', 'tenant_admin_name'],
       populate: {
         tenant: {
           fields: ['id', 'slug', 'name'],
@@ -2372,8 +2373,91 @@ module.exports = {
             policies: ['admin::isAuthenticatedAdmin'],
           },
         },
-      ],
-    });
+          {
+            method: 'GET',
+            path: '/app-user-selfie/:id',
+            handler: async (ctx) => {
+              const userId = parsePositiveInt(ctx.params.id);
+              if (!userId) {
+                return ctx.badRequest('User id must be a valid number.');
+              }
+
+              const storageConfig = getObjectStorageConfig();
+              const bucket = storageConfig.bucket;
+              const region = storageConfig.region;
+              const expiresIn = parsePositiveInt(process.env.S3_PRESIGN_EXPIRES_IN) || 900;
+              const tenantContext = await getAdminTenantContext(strapi, await getAdminRequestUser(ctx, strapi));
+              let user;
+
+              if (tenantContext.isSuperAdmin) {
+                user = await strapi.entityService.findOne(APP_USER_UID, userId, {
+                  fields: ['id', 'image_url'],
+                  populate: {
+                    tenant: {
+                      fields: ['id', 'slug', 'name'],
+                    },
+                  },
+                });
+              } else {
+                user = await assertScopedAdminRecord(strapi, tenantContext, APP_USER_UID, userId);
+              }
+
+              if (!user) {
+                return ctx.forbidden('This user is outside your tenant.');
+              }
+
+              const imageUrl = String(user.image_url || '').trim();
+              if (!imageUrl) {
+                ctx.body = {
+                  data: null,
+                  meta: {
+                    hasImage: false,
+                  },
+                };
+                return;
+              }
+
+              const objectKey = extractObjectStorageKeyFromUrl(imageUrl, bucket, region);
+              if (!objectKey) {
+                ctx.body = {
+                  data: {
+                    signedUrl: imageUrl,
+                    objectUrl: imageUrl,
+                    key: null,
+                  },
+                  meta: {
+                    hasImage: true,
+                    storage: 'public-url',
+                  },
+                };
+                return;
+              }
+
+              const s3Client = createObjectStorageClient();
+              const signedUrl = await s3Client.getSignedUrlPromise('getObject', {
+                Bucket: bucket,
+                Key: objectKey,
+                Expires: expiresIn,
+              });
+
+              ctx.body = {
+                data: {
+                  signedUrl,
+                  objectUrl: buildObjectStoragePublicUrl(bucket, region, objectKey),
+                  key: objectKey,
+                },
+                meta: {
+                  hasImage: true,
+                  expiresIn,
+                },
+              };
+            },
+            config: {
+              policies: ['admin::isAuthenticatedAdmin'],
+            },
+          },
+        ],
+      });
   },
 
   /**

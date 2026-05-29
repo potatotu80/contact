@@ -65,6 +65,35 @@ const buildObjectStoragePublicUrl = (bucket, region, key) => {
   return `https://${bucket}.s3.${region}.amazonaws.com/${encodedKey}`;
 };
 
+const extractObjectStorageKeyFromUrl = (url, bucket, region) => {
+  const value = String(url || '').trim();
+  if (!value) {
+    return null;
+  }
+
+  const { publicBaseUrl, endpoint } = getObjectStorageConfig();
+  const candidates = [];
+
+  if (publicBaseUrl) {
+    candidates.push(`${publicBaseUrl}/`);
+  }
+
+  if (endpoint) {
+    candidates.push(`${endpoint}/${encodeURIComponent(bucket)}/`);
+    candidates.push(`${endpoint}/${bucket}/`);
+  }
+
+  candidates.push(`https://${bucket}.s3.${region}.amazonaws.com/`);
+
+  for (const prefix of candidates) {
+    if (value.startsWith(prefix)) {
+      return decodeURIComponent(value.slice(prefix.length));
+    }
+  }
+
+  return null;
+};
+
 const buildObjectStorageConsoleFolderUrl = (bucket, region, prefix) => {
   const { provider, publicBaseUrl } = getObjectStorageConfig();
 
@@ -89,5 +118,6 @@ module.exports = {
   buildObjectStorageConsoleFolderUrl,
   buildObjectStoragePublicUrl,
   createObjectStorageClient,
+  extractObjectStorageKeyFromUrl,
   getObjectStorageConfig,
 };
