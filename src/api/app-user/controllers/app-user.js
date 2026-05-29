@@ -82,17 +82,16 @@ const normalizePhone = (value) => {
 
 const isValidE164Phone = (value) => /^\+[1-9]\d{7,14}$/.test(value);
 
-const getTwilioConfig = () => ({
-  accountSid: (process.env.TWILIO_ACCOUNT_SID || '').trim(),
-  authToken: (process.env.TWILIO_AUTH_TOKEN || '').trim(),
-  verifyServiceSid: (process.env.TWILIO_VERIFY_SERVICE_SID || '').trim(),
+const getTelnyxVerifyConfig = () => ({
+  apiKey: (process.env.TELNYX_API_KEY || '').trim(),
+  verifyProfileId: (process.env.TELNYX_VERIFY_PROFILE_ID || '').trim(),
 });
 
-const assertTwilioConfigured = () => {
-  const config = getTwilioConfig();
+const assertTelnyxVerifyConfigured = () => {
+  const config = getTelnyxVerifyConfig();
 
-  if (!config.accountSid || !config.authToken || !config.verifyServiceSid) {
-    const error = new Error('Twilio Verify is not configured.');
+  if (!config.apiKey || !config.verifyProfileId) {
+    const error = new Error('Telnyx Verify is not configured.');
     error.status = 500;
     throw error;
   }
@@ -108,19 +107,20 @@ const parseJson = (value) => {
   }
 };
 
-const callTwilioVerify = ({ path: requestPath, body, accountSid, authToken }) =>
+const callTelnyxVerify = ({ path: requestPath, body, apiKey }) =>
   new Promise((resolve, reject) => {
-    const encodedBody = new URLSearchParams(body).toString();
+    const encodedBody = JSON.stringify(body || {});
 
     const request = https.request(
       {
-        hostname: 'verify.twilio.com',
+        hostname: 'api.telnyx.com',
         port: 443,
         path: requestPath,
         method: 'POST',
         headers: {
-          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Bearer ${apiKey}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(encodedBody),
         },
       },
@@ -200,9 +200,17 @@ const ensureOtpAllowed = async (ctx, strapi, phone, action) => {
   return true;
 };
 
-const extractTwilioErrorMessage = (payload, fallbackMessage) => {
+const extractTelnyxErrorMessage = (payload, fallbackMessage) => {
   if (payload && typeof payload.message === 'string' && payload.message.trim()) {
     return payload.message.trim();
+  }
+
+  const firstError = Array.isArray(payload?.errors) ? payload.errors[0] : null;
+  if (typeof firstError?.detail === 'string' && firstError.detail.trim()) {
+    return firstError.detail.trim();
+  }
+  if (typeof firstError?.title === 'string' && firstError.title.trim()) {
+    return firstError.title.trim();
   }
 
   return fallbackMessage;
@@ -473,20 +481,19 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
 
     let config;
     try {
-      config = assertTwilioConfigured();
+      config = assertTelnyxVerifyConfigured();
     } catch (error) {
       strapi.log.error(error.message);
-      return ctx.internalServerError('Twilio Verify is not configured.');
+      return ctx.internalServerError('Telnyx Verify is not configured.');
     }
 
-    const response = await callTwilioVerify({
-      path: `/v2/Services/${config.verifyServiceSid}/Verifications`,
+    const response = await callTelnyxVerify({
+      path: '/v2/verifications/sms',
       body: {
-        To: phone,
-        Channel: 'sms',
+        phone_number: phone,
+        verify_profile_id: config.verifyProfileId,
       },
-      accountSid: config.accountSid,
-      authToken: config.authToken,
+      apiKey: config.apiKey,
     });
 
     const payload = response.json || {};
@@ -494,18 +501,19 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       phone,
       action: 'send',
       successful: response.ok,
-      status: payload.status || String(response.status),
+      status: payload?.data?.status || String(response.status),
     });
 
     if (!response.ok) {
-      return ctx.badRequest(extractTwilioErrorMessage(payload, 'Unable to send OTP.'));
+      return ctx.badRequest(extractTelnyxErrorMessage(payload, 'Unable to send OTP.'));
     }
 
     ctx.body = {
       data: {
         phone,
-        status: payload.status || 'pending',
-        channel: payload.channel || 'sms',
+        status: payload?.data?.status || 'accepted',
+        channel: payload?.data?.type || 'sms',
+        verificationId: payload?.data?.id || null,
       },
     };
   },
@@ -548,41 +556,40 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
 
     let config;
     try {
-      config = assertTwilioConfigured();
+      config = assertTelnyxVerifyConfigured();
     } catch (error) {
       strapi.log.error(error.message);
-      return ctx.internalServerError('Twilio Verify is not configured.');
+      return ctx.internalServerError('Telnyx Verify is not configured.');
     }
 
-    const response = await callTwilioVerify({
-      path: `/v2/Services/${config.verifyServiceSid}/VerificationCheck`,
+    const response = await callTelnyxVerify({
+      path: `/v2/verifications/by_phone_number/${encodeURIComponent(phone)}/actions/verify`,
       body: {
-        To: phone,
-        Code: code,
+        code,
+        verify_profile_id: config.verifyProfileId,
       },
-      accountSid: config.accountSid,
-      authToken: config.authToken,
+      apiKey: config.apiKey,
     });
 
     const payload = response.json || {};
-    const approved = response.ok && payload.status === 'approved';
+    const approved = response.ok && payload?.data?.response_code === 'accepted';
 
     await recordAttempt(strapi, {
       phone,
       action: 'verify',
       successful: approved,
-      status: payload.status || String(response.status),
+      status: payload?.data?.response_code || String(response.status),
     });
 
     if (!approved) {
-      return ctx.badRequest(extractTwilioErrorMessage(payload, 'Invalid or expired OTP code.'));
+      return ctx.badRequest(extractTelnyxErrorMessage(payload, 'Invalid or expired OTP code.'));
     }
 
     ctx.body = {
       data: {
         phone,
         phoneVerified: true,
-        status: payload.status,
+        status: payload?.data?.response_code || 'accepted',
       },
     };
   },

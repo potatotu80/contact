@@ -64,7 +64,7 @@ Authorization: Bearer <TENANT_APP_API_KEY>
 
 Strapi admin users are still allowed through the custom policy for admin-side tools.
 
-Each presented API key resolves to exactly one active `Tenant`. All app user creation, contact sync, profile image upload, and S3 presign calls are automatically scoped to that tenant. Shared Twilio Verify and Twilio Voice configuration remain global.
+Each presented API key resolves to exactly one active `Tenant`. All app user creation, contact sync, profile image upload, and S3 presign calls are automatically scoped to that tenant. Shared Telnyx Verify and Twilio Voice configuration remain global.
 
 To view all contacts for one app user without using a large relation picker in the admin form, use:
 
@@ -120,7 +120,7 @@ The public privacy policy page is available at:
 https://cmsportal.yengsang.com/privacy_policy
 ```
 
-Phone verification uses Twilio Verify. Before the mobile app uploads images, it should:
+Phone verification uses Telnyx Verify. Before the mobile app uploads images, it should:
 
 1. Call `POST /api/phone-verification/send-otp` with `{"phone":"+60123456789"}`.
 2. Call `POST /api/phone-verification/verify-otp` with `{"phone":"+60123456789","code":"123456"}`.
@@ -155,9 +155,8 @@ copy .env.example .env
 Set these values in `.env`:
 
 ```env
-TWILIO_ACCOUNT_SID=replace-me
-TWILIO_AUTH_TOKEN=replace-me
-TWILIO_VERIFY_SERVICE_SID=replace-me
+TELNYX_API_KEY=replace-me
+TELNYX_VERIFY_PROFILE_ID=replace-me
 TWILIO_VOICE_API_KEY_SID=replace-me
 TWILIO_VOICE_API_KEY_SECRET=replace-me
 TWILIO_VOICE_TWIML_APP_SID=replace-me
@@ -219,9 +218,8 @@ Set these environment variables on the EC2 instance before building and starting
 NODE_ENV=production
 HOST=127.0.0.1
 PORT=1337
-TWILIO_ACCOUNT_SID=replace-me
-TWILIO_AUTH_TOKEN=replace-me
-TWILIO_VERIFY_SERVICE_SID=replace-me
+TELNYX_API_KEY=replace-me
+TELNYX_VERIFY_PROFILE_ID=replace-me
 TWILIO_VOICE_API_KEY_SID=replace-me
 TWILIO_VOICE_API_KEY_SECRET=replace-me
 TWILIO_VOICE_TWIML_APP_SID=replace-me
