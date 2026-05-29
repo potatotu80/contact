@@ -1280,10 +1280,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
   const installUrl = ensureAbsoluteUrl(tenant?.android_apk_url);
   const deepLinkUrl = buildTenantDeepLinkUrl({ tenantCode, referralCode, qrToken });
   const intentUrl = buildTenantIntentUrl({ tenantCode, referralCode, qrToken });
-  const sharedDeepLinkScheme = getSharedDeepLinkScheme();
-  const sharedAndroidApplicationId = getSharedAndroidApplicationId();
   const safeMessage = escapeHtml('Please open this link on an Android device.');
-  const safeQrUrl = escapeHtml(qrCodeUrl || '');
 
   return `<!doctype html>
 <html lang="en">
@@ -1404,27 +1401,14 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       <h1>Open in app</h1>
       <p id="message">Open the app if it is already installed, or install the latest Android app below.</p>
       <p class="status" id="status"></p>
-      <div class="action-box" id="openAppBox" style="${deepLinkUrl ? 'display:block;' : 'display:none;'}">
-        <a class="install-button" href="${escapeHtml(deepLinkUrl)}">Open app manually</a>
+      <div class="action-box" id="openAppBox" style="${(intentUrl || deepLinkUrl) ? 'display:block;' : 'display:none;'}">
+        <a class="install-button" id="openIntentButton" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app</a>
+        <a class="install-button secondary" id="openFallbackButton" href="${escapeHtml(deepLinkUrl)}" style="${deepLinkUrl ? 'display:inline-flex;' : 'display:none;'}">Open app (fallback)</a>
       </div>
       <div class="action-box" id="installBox" style="display:none;">
         <a class="install-button secondary" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
-        <p class="hint">Need the app? Install Android app. Already installed? Use Open app manually.</p>
+        <p class="hint">Need the app? Install Android app.</p>
       </div>
-        <div class="debug">
-          <strong>Debug Info</strong>
-          <ul>
-            <li>Android request: ${escapeHtml(String(isAndroidRequest))}</li>
-            <li>Deep link scheme: ${escapeHtml(sharedDeepLinkScheme)}</li>
-            <li>Android package: ${escapeHtml(sharedAndroidApplicationId)}</li>
-            <li>Deep link URL: ${escapeHtml(deepLinkUrl)}</li>
-            <li>Intent URL: ${escapeHtml(intentUrl)}</li>
-            <li>APK URL: ${escapeHtml(installUrl || 'Not set')}</li>
-            <li>Tenant code: ${escapeHtml(tenantCode || '')}</li>
-            <li>QR token present: ${escapeHtml(String(Boolean(qrToken)))}</li>
-          </ul>
-        </div>
-        ${safeQrUrl ? `<code>${safeQrUrl}</code>` : ''}
       </main>
       <script>
         (function () {
@@ -1442,6 +1426,8 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           var installBox = document.getElementById("installBox");
           var installButton = document.getElementById("installButton");
           var openAppBox = document.getElementById("openAppBox");
+          var openIntentButton = document.getElementById("openIntentButton");
+          var openFallbackButton = document.getElementById("openFallbackButton");
           var message = document.getElementById("message");
           var status = document.getElementById("status");
           var hasLeftPage = false;
@@ -1458,6 +1444,12 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
 
           if (openAppBox && (intentUrl || deepLinkUrl)) {
             openAppBox.style.display = "block";
+          }
+          if (openIntentButton) {
+            openIntentButton.style.display = (intentUrl || deepLinkUrl) ? "inline-flex" : "none";
+          }
+          if (openFallbackButton) {
+            openFallbackButton.style.display = deepLinkUrl ? "inline-flex" : "none";
           }
 
           if (!deepLinkUrl) {
@@ -1481,7 +1473,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           }
 
           status.textContent = installUrl
-            ? "Trying to open the app now. If it stays on this page, use Open app manually or install the app below."
+            ? "Trying to open the app now. If it stays on this page, use Open app, Open app (fallback), or Install Android app."
             : "Trying to open the app now. This tenant currently has no APK download URL configured.";
 
           document.addEventListener("visibilitychange", function () {
