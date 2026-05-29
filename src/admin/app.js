@@ -1233,6 +1233,122 @@ const ReadOnlyField = ({ label, value, monospace = false }) => (
   </Box>
 );
 
+const AppUserSelfiePreview = () => {
+  const { slug, initialData, modifiedData } = useCMEditViewDataManager();
+  const [mountNode, setMountNode] = useState(null);
+  const isAppUser = slug === APP_USER_UID;
+  const selfieUrl = String(modifiedData?.image_url || initialData?.image_url || '').trim();
+
+  useEffect(() => {
+    if (!isAppUser) {
+      setMountNode(null);
+      return undefined;
+    }
+
+    let disposed = false;
+
+    const attachPreviewHost = () => {
+      const imageUrlContainer =
+        findFieldContainer('image_url') ||
+        findFieldContainerByLabel(['image_url', 'Image Url']);
+
+      if (!imageUrlContainer) {
+        return;
+      }
+
+      imageUrlContainer.style.display = 'none';
+
+      let previewHost = imageUrlContainer.parentElement?.querySelector('[data-app-user-selfie-preview="true"]');
+      if (!previewHost) {
+        previewHost = document.createElement('div');
+        previewHost.dataset.appUserSelfiePreview = 'true';
+        previewHost.style.width = '100%';
+        previewHost.style.marginTop = '8px';
+        imageUrlContainer.insertAdjacentElement('afterend', previewHost);
+      }
+
+      if (!disposed) {
+        setMountNode(previewHost);
+      }
+    };
+
+    const intervalId = window.setInterval(attachPreviewHost, 600);
+    attachPreviewHost();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [isAppUser, initialData?.id]);
+
+  if (!isAppUser || !mountNode) {
+    return null;
+  }
+
+  return createPortal(
+    <Box
+      background="neutral0"
+      borderColor="neutral200"
+      hasRadius
+      padding={4}
+      shadow="filterShadow"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+      }}
+    >
+      <Typography variant="omega" textColor="neutral600">
+        Selfie
+      </Typography>
+
+      {selfieUrl ? (
+        <>
+          <Box
+            style={{
+              maxWidth: '280px',
+              border: '1px solid #dcdce4',
+              borderRadius: '12px',
+              overflow: 'hidden',
+              background: '#ffffff',
+            }}
+          >
+            <img
+              src={selfieUrl}
+              alt="User selfie"
+              style={{
+                display: 'block',
+                width: '100%',
+                height: 'auto',
+                objectFit: 'cover',
+                background: '#f6f6f9',
+              }}
+            />
+          </Box>
+          <a
+            href={selfieUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              color: '#4945ff',
+              fontSize: '12px',
+              fontWeight: 600,
+              textDecoration: 'none',
+            }}
+          >
+            Open full image
+          </a>
+        </>
+      ) : (
+        <Typography variant="pi" textColor="neutral500">
+          No selfie uploaded yet.
+        </Typography>
+      )}
+    </Box>,
+    mountNode
+  );
+};
+
 const TenantColorPanel = () => {
   const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
   const isTenantScreen = slug === TENANT_UID;
@@ -1748,6 +1864,11 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'app-user-panel',
     Component: AppUserPanel,
+  });
+
+  app.injectContentManagerComponent('editView', 'right-links', {
+    name: 'app-user-selfie-preview',
+    Component: AppUserSelfiePreview,
   });
 
   app.injectContentManagerComponent('editView', 'right-links', {

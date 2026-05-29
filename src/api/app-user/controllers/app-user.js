@@ -8,9 +8,14 @@ const { createCoreController } = require('@strapi/strapi').factories;
 const {
   APP_USER_UID,
   assertTenantScopeForUser,
-  buildTenantLocalImagePath,
+  buildTenantUserImagePrefix,
   getTenantFilter,
 } = require('../../../utils/tenant-access');
+const {
+  buildObjectStoragePublicUrl,
+  createObjectStorageClient,
+  getObjectStorageConfig,
+} = require('../../../utils/object-storage');
 
 const OTP_ATTEMPT_UID = 'api::otp-attempt.otp-attempt';
 const OTP_WINDOW_MS = 10 * 60 * 1000;
@@ -53,11 +58,6 @@ const getFileExtension = (file) => {
   const mimeType = file.type || file.mimetype || '';
   const mimeExtension = mimeType.split('/')[1];
   return mimeExtension ? `.${sanitizeSegment(mimeExtension, 'bin')}` : '.bin';
-};
-
-const buildPublicFileUrl = (relativePath) => {
-  const publicUrl = (process.env.PUBLIC_URL || '').trim().replace(/\/$/, '');
-  return publicUrl ? `${publicUrl}${relativePath}` : relativePath;
 };
 
 const sanitizeForEmailLocalPart = (value, fallback) => {
@@ -757,8 +757,6 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       return ctx.badRequest('Uploaded file path is missing.');
     }
 
-    const localTenantPath = buildTenantLocalImagePath(tenant, userId);
-    const uploadsRoot = path.join(strapi.dirs.static.public, 'uploads', 'user-images', localTenantPath);
     const extension = getFileExtension(uploadedFile);
     const fileNameBase = sanitizeSegment(
       path.parse(uploadedFile.originalFilename || uploadedFile.name || 'profile-image').name,
@@ -768,14 +766,23 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       ? crypto.randomUUID()
       : crypto.randomBytes(16).toString('hex');
     const storedFileName = `${Date.now()}-${uniquePart}-${fileNameBase}${extension}`;
-    const destinationPath = path.join(uploadsRoot, storedFileName);
+    const { bucket, region, prefixBase } = getObjectStorageConfig();
+    const objectKey = `${buildTenantUserImagePrefix(tenant, userId, prefixBase)}/${storedFileName}`;
+    const objectStorageClient = createObjectStorageClient();
 
-    await fs.mkdir(uploadsRoot, { recursive: true });
-    await fs.copyFile(sourcePath, destinationPath);
-    await fs.unlink(sourcePath).catch(() => {});
+    try {
+      const fileBuffer = await fs.readFile(sourcePath);
+      await objectStorageClient.putObject({
+        Bucket: bucket,
+        Key: objectKey,
+        Body: fileBuffer,
+        ContentType: mimeType || 'application/octet-stream',
+      }).promise();
+    } finally {
+      await fs.unlink(sourcePath).catch(() => {});
+    }
 
-    const relativePath = `/uploads/user-images/${localTenantPath}/${storedFileName}`;
-    const imageUrl = buildPublicFileUrl(relativePath);
+    const imageUrl = buildObjectStoragePublicUrl(bucket, region, objectKey);
 
     const updatedUser = await strapi.entityService.update(APP_USER_UID, userId, {
       data: {
@@ -794,7 +801,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
 
     return this.transformResponse(sanitizedUser, {
       imageUrl,
-      relativePath,
+      objectKey,
     });
   },
 }));
