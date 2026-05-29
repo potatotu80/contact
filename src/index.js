@@ -5,6 +5,11 @@ const QRCode = require('qrcode');
 const twilio = require('twilio');
 const { generateTenantApiKey } = require('./utils/tenant-api-key');
 const {
+  buildObjectStoragePublicUrl,
+  createObjectStorageClient,
+  getObjectStorageConfig,
+} = require('./utils/object-storage');
+const {
   buildTenantAdminQrCodeUrl,
   getSharedAndroidApplicationId,
   getSharedDeepLinkScheme,
@@ -22,15 +27,6 @@ const {
 } = require('./utils/tenant-access');
 const TENANT_ADMIN_BULK_SENTINEL = '__tenant_admin_bulk__:';
 const SHARED_APP_UID = 'api::shared-app.shared-app';
-
-const buildS3ObjectUrl = (bucket, region, key) => {
-  const encodedKey = key
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
-
-  return `https://${bucket}.s3.${region}.amazonaws.com/${encodedKey}`;
-};
 
 const buildVoiceIdentity = (adminUser) => {
   const prefix = (process.env.TWILIO_VOICE_IDENTITY_PREFIX || 'admin').trim() || 'admin';
@@ -2297,13 +2293,14 @@ module.exports = {
               return ctx.badRequest('User id must be a valid number.');
             }
 
-            const bucket = process.env.S3_BUCKET_NAME;
-            const region = process.env.AWS_REGION;
+            const storageConfig = getObjectStorageConfig();
+            const bucket = storageConfig.bucket;
+            const region = storageConfig.region;
             const prefixBase = process.env.S3_IMAGES_PREFIX || 'users';
             const expiresIn = parsePositiveInt(process.env.S3_PRESIGN_EXPIRES_IN) || 900;
 
             if (!bucket || !region) {
-              return ctx.internalServerError('S3 configuration missing: S3_BUCKET_NAME or AWS_REGION.');
+              return ctx.internalServerError('Object storage configuration missing: R2_BUCKET_NAME/S3_BUCKET_NAME or AWS_REGION.');
             }
 
             const tenantContext = await getAdminTenantContext(strapi, await getAdminRequestUser(ctx, strapi));
@@ -2326,10 +2323,7 @@ module.exports = {
               return ctx.forbidden('This user is outside your tenant.');
             }
 
-            const s3Client = new AWS.S3({
-              region,
-              signatureVersion: 'v4',
-            });
+            const s3Client = createObjectStorageClient();
 
             const prefix = `${buildTenantUserImagePrefix(user.tenant, userId, prefixBase)}/`;
             const listed = await s3Client.listObjectsV2({
@@ -2358,7 +2352,7 @@ module.exports = {
                     size: item.Size || 0,
                     lastModified: item.LastModified || null,
                     signedUrl,
-                    objectUrl: buildS3ObjectUrl(bucket, region, item.Key),
+                    objectUrl: buildObjectStoragePublicUrl(bucket, region, item.Key),
                   };
                 })
             );
