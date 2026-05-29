@@ -2,14 +2,11 @@
 
 const fs = require('fs/promises');
 const path = require('path');
+const AWS = require('aws-sdk');
 const {
   buildTenantLocalImagePath,
   buildTenantUserImagePrefix,
 } = require('../../../../utils/tenant-access');
-const {
-  createObjectStorageClient,
-  getObjectStorageConfig,
-} = require('../../../../utils/object-storage');
 
 const CONTACT_UID = 'api::contact.contact';
 
@@ -38,9 +35,8 @@ const extractDeleteId = (where) => {
 };
 
 const deleteS3Prefix = async (tenant, userId) => {
-  const storageConfig = getObjectStorageConfig();
-  const bucket = storageConfig.bucket;
-  const region = storageConfig.region;
+  const bucket = process.env.S3_BUCKET_NAME;
+  const region = process.env.AWS_REGION;
   const prefixBase = process.env.S3_IMAGES_PREFIX || 'users';
   const prefix = `${buildTenantUserImagePrefix(tenant, userId, prefixBase)}/`;
 
@@ -48,7 +44,10 @@ const deleteS3Prefix = async (tenant, userId) => {
     return;
   }
 
-  const s3Client = createObjectStorageClient();
+  const s3Client = new AWS.S3({
+    region,
+    signatureVersion: 'v4',
+  });
 
   let continuationToken;
 

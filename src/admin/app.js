@@ -10,10 +10,9 @@ const APP_USER_UID = 'api::app-user.app-user';
 const CONTACT_UID = 'api::contact.contact';
 const TENANT_UID = 'api::tenant.tenant';
 const TENANT_ADMIN_UID = 'api::tenant-admin.tenant-admin';
-const S3_BUCKET = process.env.STRAPI_ADMIN_R2_BUCKET || process.env.STRAPI_ADMIN_S3_BUCKET || 'yengtesting';
-const S3_REGION = process.env.STRAPI_ADMIN_R2_REGION || process.env.STRAPI_ADMIN_S3_REGION || 'auto';
+const S3_BUCKET = process.env.STRAPI_ADMIN_S3_BUCKET || 'yengtesting';
+const S3_REGION = process.env.STRAPI_ADMIN_S3_REGION || 'ap-southeast-1';
 const S3_IMAGES_PREFIX = process.env.STRAPI_ADMIN_S3_IMAGES_PREFIX || 'users';
-const R2_PUBLIC_BASE_URL = String(process.env.STRAPI_ADMIN_R2_PUBLIC_BASE_URL || '').replace(/\/+$/, '');
 
 const formatDateTime = (value) => {
   if (!value) return 'Not available';
@@ -28,9 +27,6 @@ const buildS3ConsoleFolderUrl = (tenantSlug, userId) => {
   if (!tenantSlug || !userId || !S3_BUCKET || !S3_REGION) return null;
 
   const prefix = `${S3_IMAGES_PREFIX}/${tenantSlug}/${userId}/images/`;
-  if (R2_PUBLIC_BASE_URL) {
-    return `${R2_PUBLIC_BASE_URL}/${prefix}`;
-  }
   return (
     `https://s3.console.aws.amazon.com/s3/buckets/${S3_BUCKET}` +
     `?region=${encodeURIComponent(S3_REGION)}` +
