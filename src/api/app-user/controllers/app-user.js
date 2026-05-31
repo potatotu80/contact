@@ -518,6 +518,9 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     });
 
     if (!response.ok) {
+      strapi.log.warn(
+        `[telnyx-send-otp] phone=${phone} status=${response.status} payload=${JSON.stringify(payload)}`
+      );
       return ctx.badRequest(extractTelnyxErrorMessage(payload, 'Unable to send OTP.'));
     }
 

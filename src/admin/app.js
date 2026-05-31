@@ -1385,6 +1385,64 @@ const AppUserSelfiePreview = () => {
   );
 };
 
+const AppUserFieldLayout = () => {
+  const { slug, initialData } = useCMEditViewDataManager();
+  const isAppUser = slug === APP_USER_UID;
+
+  useEffect(() => {
+    if (!isAppUser || !initialData?.id) {
+      return undefined;
+    }
+
+    let disposed = false;
+
+    const moveUserIdField = () => {
+      const userIdContainer =
+        findFieldContainer('user_id') ||
+        findFieldContainerByLabel(['user_id', 'User ID']);
+      const phoneVerifiedContainer =
+        findFieldContainer('phoneVerified') ||
+        findFieldContainerByLabel(['phoneVerified', 'Phone Verified']);
+
+      if (!userIdContainer || !phoneVerifiedContainer) {
+        return;
+      }
+
+      const targetParent = phoneVerifiedContainer.parentElement;
+      if (!targetParent) {
+        return;
+      }
+
+      userIdContainer.style.width = '100%';
+      userIdContainer.style.marginBottom = '16px';
+
+      if (userIdContainer.parentElement !== targetParent || userIdContainer.nextSibling !== phoneVerifiedContainer) {
+        targetParent.insertBefore(userIdContainer, phoneVerifiedContainer);
+      }
+
+      const sourceRow = findFieldContainer('tenant')?.parentElement?.parentElement;
+      if (sourceRow && sourceRow.children.length === 1) {
+        sourceRow.style.display = 'block';
+      }
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (!disposed) {
+        moveUserIdField();
+      }
+    }, 600);
+
+    moveUserIdField();
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [initialData?.id, isAppUser]);
+
+  return null;
+};
+
 const TenantColorPanel = () => {
   const { slug, initialData, modifiedData, onChange } = useCMEditViewDataManager();
   const isTenantScreen = slug === TENANT_UID;
@@ -1905,6 +1963,11 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'app-user-selfie-preview',
     Component: AppUserSelfiePreview,
+  });
+
+  app.injectContentManagerComponent('editView', 'right-links', {
+    name: 'app-user-field-layout',
+    Component: AppUserFieldLayout,
   });
 
   app.injectContentManagerComponent('editView', 'right-links', {
