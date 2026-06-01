@@ -1403,6 +1403,15 @@ const AppUserFieldLayout = () => {
       const phoneVerifiedContainer =
         findFieldContainer('phoneVerified') ||
         findFieldContainerByLabel(['phoneVerified', 'Phone Verified']);
+      const tenantContainer =
+        findFieldContainer('tenant') ||
+        findFieldContainerByLabel(['tenant', 'linked tenant']);
+      const tenantAdminIdContainer =
+        findFieldContainer('tenant_admin_id') ||
+        findFieldContainerByLabel(['tenant_admin_id', 'Tenant Admin Id']);
+      const tenantAdminNameContainer =
+        findFieldContainer('tenant_admin_name') ||
+        findFieldContainerByLabel(['tenant_admin_name', 'Tenant Admin Name']);
 
       if (!userIdContainer || !phoneVerifiedContainer) {
         return;
@@ -1415,14 +1424,27 @@ const AppUserFieldLayout = () => {
 
       userIdContainer.style.width = '100%';
       userIdContainer.style.marginBottom = '16px';
+      userIdContainer.style.maxWidth = '100%';
 
       if (userIdContainer.parentElement !== targetParent || userIdContainer.nextSibling !== phoneVerifiedContainer) {
         targetParent.insertBefore(userIdContainer, phoneVerifiedContainer);
       }
 
-      const sourceRow = findFieldContainer('tenant')?.parentElement?.parentElement;
+      const sourceRow = tenantContainer?.parentElement?.parentElement;
       if (sourceRow && sourceRow.children.length === 1) {
         sourceRow.style.display = 'block';
+      }
+
+      if (tenantContainer) {
+        tenantContainer.style.display = 'none';
+      }
+
+      if (tenantAdminIdContainer) {
+        tenantAdminIdContainer.style.display = 'none';
+      }
+
+      if (tenantAdminNameContainer) {
+        tenantAdminNameContainer.style.display = 'none';
       }
     };
 
