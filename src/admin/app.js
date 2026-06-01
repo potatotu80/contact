@@ -649,6 +649,44 @@ const findFieldContainer = (fieldName) => {
   );
 };
 
+const findTopLevelFieldBlock = (fieldName, labelCandidates = []) => {
+  const baseContainer =
+    findFieldContainer(fieldName) ||
+    (labelCandidates.length ? findFieldContainerByLabel(labelCandidates) : null);
+
+  if (!baseContainer) {
+    return null;
+  }
+
+  let current = baseContainer;
+  while (current?.parentElement) {
+    const parent = current.parentElement;
+    if (
+      parent === document.body ||
+      parent.id === 'root' ||
+      parent.getAttribute?.('role') === 'main'
+    ) {
+      break;
+    }
+
+    const parentStyle = window.getComputedStyle(parent);
+    const isLayoutCell =
+      parentStyle.display === 'grid' ||
+      parentStyle.display === 'inline-grid' ||
+      parentStyle.display === 'flex' ||
+      parentStyle.display === 'block';
+
+    if (parent.childElementCount > 1 && isLayoutCell) {
+      current = parent;
+      break;
+    }
+
+    current = parent;
+  }
+
+  return current;
+};
+
 const normalizeFieldLabel = (value) => String(value || '').replace(/\*/g, '').trim().toLowerCase();
 
 const findFieldContainerByLabel = (labelCandidates) => {
@@ -1397,21 +1435,11 @@ const AppUserFieldLayout = () => {
     let disposed = false;
 
     const moveUserIdField = () => {
-      const userIdContainer =
-        findFieldContainer('user_id') ||
-        findFieldContainerByLabel(['user_id', 'User ID']);
-      const phoneVerifiedContainer =
-        findFieldContainer('phoneVerified') ||
-        findFieldContainerByLabel(['phoneVerified', 'Phone Verified']);
-      const tenantContainer =
-        findFieldContainer('tenant') ||
-        findFieldContainerByLabel(['tenant', 'linked tenant']);
-      const tenantAdminIdContainer =
-        findFieldContainer('tenant_admin_id') ||
-        findFieldContainerByLabel(['tenant_admin_id', 'Tenant Admin Id']);
-      const tenantAdminNameContainer =
-        findFieldContainer('tenant_admin_name') ||
-        findFieldContainerByLabel(['tenant_admin_name', 'Tenant Admin Name']);
+      const userIdContainer = findTopLevelFieldBlock('user_id', ['user_id', 'User ID']);
+      const phoneVerifiedContainer = findTopLevelFieldBlock('phoneVerified', ['phoneVerified', 'Phone Verified']);
+      const tenantContainer = findTopLevelFieldBlock('tenant', ['tenant', 'linked tenant']);
+      const tenantAdminIdContainer = findTopLevelFieldBlock('tenant_admin_id', ['tenant_admin_id', 'Tenant Admin Id']);
+      const tenantAdminNameContainer = findTopLevelFieldBlock('tenant_admin_name', ['tenant_admin_name', 'Tenant Admin Name']);
 
       if (!userIdContainer || !phoneVerifiedContainer) {
         return;
@@ -1430,7 +1458,7 @@ const AppUserFieldLayout = () => {
         targetParent.insertBefore(userIdContainer, phoneVerifiedContainer);
       }
 
-      const sourceRow = tenantContainer?.parentElement?.parentElement;
+      const sourceRow = tenantContainer?.parentElement;
       if (sourceRow && sourceRow.children.length === 1) {
         sourceRow.style.display = 'block';
       }
