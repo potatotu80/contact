@@ -1435,11 +1435,21 @@ const AppUserFieldLayout = () => {
     let disposed = false;
 
     const moveUserIdField = () => {
-      const userIdContainer = findTopLevelFieldBlock('user_id', ['user_id', 'User ID']);
-      const phoneVerifiedContainer = findTopLevelFieldBlock('phoneVerified', ['phoneVerified', 'Phone Verified']);
-      const tenantContainer = findTopLevelFieldBlock('tenant', ['tenant', 'linked tenant']);
-      const tenantAdminIdContainer = findTopLevelFieldBlock('tenant_admin_id', ['tenant_admin_id', 'Tenant Admin Id']);
-      const tenantAdminNameContainer = findTopLevelFieldBlock('tenant_admin_name', ['tenant_admin_name', 'Tenant Admin Name']);
+      const userIdContainer =
+        findFieldContainer('user_id') ||
+        findFieldContainerByLabel(['user_id', 'User ID']);
+      const phoneVerifiedContainer =
+        findFieldContainer('phoneVerified') ||
+        findFieldContainerByLabel(['phoneVerified', 'Phone Verified']);
+      const tenantContainer =
+        findFieldContainer('tenant') ||
+        findFieldContainerByLabel(['tenant', 'linked tenant']);
+      const tenantAdminIdContainer =
+        findFieldContainer('tenant_admin_id') ||
+        findFieldContainerByLabel(['tenant_admin_id', 'Tenant Admin Id']);
+      const tenantAdminNameContainer =
+        findFieldContainer('tenant_admin_name') ||
+        findFieldContainerByLabel(['tenant_admin_name', 'Tenant Admin Name']);
 
       if (!userIdContainer || !phoneVerifiedContainer) {
         return;
@@ -1458,7 +1468,7 @@ const AppUserFieldLayout = () => {
         targetParent.insertBefore(userIdContainer, phoneVerifiedContainer);
       }
 
-      const sourceRow = tenantContainer?.parentElement;
+      const sourceRow = tenantContainer?.parentElement?.parentElement;
       if (sourceRow && sourceRow.children.length === 1) {
         sourceRow.style.display = 'block';
       }
