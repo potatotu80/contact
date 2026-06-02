@@ -1277,7 +1277,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
   const primaryColor = /^#[0-9A-Fa-f]{6}$/.test(String(tenant?.primary_color || '').trim())
     ? tenant.primary_color
     : '#2F6BFF';
-  const resolvedReferralCode = String(referralCode || tenant?.name || tenant?.app_display_name || '').trim();
+  const resolvedReferralCode = String(referralCode || '').trim();
   const installUrl = ensureAbsoluteUrl(tenant?.android_apk_url);
   const deepLinkUrl = buildTenantDeepLinkUrl({ tenantCode, referralCode: resolvedReferralCode, qrToken });
   const intentUrl = buildTenantIntentUrl({ tenantCode, referralCode: resolvedReferralCode, qrToken });
@@ -2168,9 +2168,13 @@ module.exports = {
             limit: 1,
           }))[0];
 
+          const effectiveReferralCode = String(
+            referralCode || launchContext?.tenantAdmin?.tenant_name || ''
+          ).trim();
+
           if (!tenant) {
             strapi.log.warn(
-              `[qr-install] Missing tenant for tenantCode="${tenantCode}" qrTokenPresent=${Boolean(qrToken)} referralCode="${referralCode}"`
+              `[qr-install] Missing tenant for tenantCode="${tenantCode}" qrTokenPresent=${Boolean(qrToken)} referralCode="${effectiveReferralCode}"`
             );
             ctx.type = 'text/html; charset=utf-8';
             ctx.status = 404;
@@ -2182,7 +2186,7 @@ module.exports = {
               },
               tenantCode,
               qrToken,
-              referralCode,
+              referralCode: effectiveReferralCode,
               qrCodeUrl: '',
               isAndroidRequest,
             });
@@ -2194,7 +2198,7 @@ module.exports = {
               ensureAbsoluteUrl(sharedApkUrl || tenant.android_apk_url)
             )} qrCodeUrl="${launchContext?.tenantAdmin?.qr_code_url || tenant.qr_code_url || ''}" qrTokenPresent=${Boolean(
               qrToken
-            )} referralCode="${referralCode}"`
+            )} referralCode="${effectiveReferralCode}"`
           );
 
           ctx.type = 'text/html; charset=utf-8';
@@ -2205,7 +2209,7 @@ module.exports = {
             },
             tenantCode: tenant.slug || tenantCode,
             qrToken: qrToken || launchContext?.tenantAdmin?.qr_token || '',
-            referralCode,
+            referralCode: effectiveReferralCode,
             qrCodeUrl: launchContext?.tenantAdmin?.qr_code_url || tenant.qr_code_url || ctx.request.href,
             isAndroidRequest,
           });

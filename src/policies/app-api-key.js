@@ -1,6 +1,6 @@
 'use strict';
 
-const { findTenantByApiKey, findTenantByReferralCode, findTenantLaunchByQrToken } = require('../utils/tenant-access');
+const { findTenantByApiKey, findTenantLaunchByQrToken, findTenantLaunchByReferralCode } = require('../utils/tenant-access');
 
 const getClientIp = (ctx) => {
   const forwardedFor = ctx.request.headers['x-forwarded-for'];
@@ -80,10 +80,13 @@ module.exports = async (policyContext, _config, { strapi }) => {
   const launchContext = qrTokenHeader
     ? await findTenantLaunchByQrToken(strapi, qrTokenHeader)
     : null;
+  const referralLaunchContext = !launchContext && referralCode
+    ? await findTenantLaunchByReferralCode(strapi, referralCode)
+    : null;
   const tenant =
     launchContext?.tenant
     || await findTenantByApiKey(strapi, presentedKey)
-    || await findTenantByReferralCode(strapi, referralCode);
+    || referralLaunchContext?.tenant;
   if (tenant) {
     strapi.log.info(
       `[app-api-key] Accepted ${policyContext.request.method} ${policyContext.request.path} ` +
@@ -91,9 +94,10 @@ module.exports = async (policyContext, _config, { strapi }) => {
       `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
     );
     policyContext.state.appTenant = tenant;
-    if (launchContext?.tenantAdmin) {
-      policyContext.state.appTenantAdmin = launchContext.tenantAdmin;
-      policyContext.state.appLaunchToken = launchContext.tenantAdmin.qr_token;
+    const resolvedTenantAdmin = launchContext?.tenantAdmin || referralLaunchContext?.tenantAdmin || null;
+    if (resolvedTenantAdmin) {
+      policyContext.state.appTenantAdmin = resolvedTenantAdmin;
+      policyContext.state.appLaunchToken = resolvedTenantAdmin.qr_token;
     }
     return true;
   }

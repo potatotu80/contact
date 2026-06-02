@@ -115,6 +115,41 @@ const assertUniqueTenantAdminMapping = async ({
   );
 };
 
+const assertUniqueTenantAdminName = async ({
+  tenantAdminName,
+  currentRecordId,
+}) => {
+  const normalizedName = String(tenantAdminName || '').trim();
+  if (!normalizedName) {
+    return;
+  }
+
+  const existingRecords = await strapi.entityService.findMany(TENANT_ADMIN_UID, {
+    filters: {
+      tenant_name: {
+        $eq: normalizedName,
+      },
+      ...(currentRecordId
+        ? {
+            id: {
+              $ne: currentRecordId,
+            },
+          }
+        : {}),
+    },
+    fields: ['id', 'tenant_name', 'admin_email'],
+    limit: 1,
+  });
+
+  if (!existingRecords[0]) {
+    return;
+  }
+
+  throw new ValidationError(
+    `Tenant Admin Name "${normalizedName}" is already in use. Please choose a unique Tenant Admin Name because it is used as the referral code.`
+  );
+};
+
 const syncAdminSnapshot = async (event) => {
   const data = event.params?.data;
   if (!data) {
@@ -209,6 +244,11 @@ const syncAdminSnapshot = async (event) => {
   if (!String(data.tenant_name || '').trim()) {
     data.tenant_name = String(existingTenantAdmin?.tenant_name || tenant.name || '').trim() || null;
   }
+
+  await assertUniqueTenantAdminName({
+    tenantAdminName: data.tenant_name,
+    currentRecordId: existingRecordId,
+  });
 
   const nextQrToken = String(data.qr_token || existingTenantAdmin?.qr_token || '').trim() || generateTenantAdminQrToken();
   data.qr_token = nextQrToken;

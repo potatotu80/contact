@@ -33,40 +33,57 @@ const findTenantByApiKey = async (strapi, apiKey) => {
   return tenants[0] || null;
 };
 
-const findTenantByReferralCode = async (strapi, referralCode) => {
+const findTenantLaunchByReferralCode = async (strapi, referralCode) => {
   const code = String(referralCode || '').trim();
   if (!code) {
     return null;
   }
 
-  const exactMatch = await strapi.entityService.findMany(APP_TENANT_UID, {
+  const tenantAdmins = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
     filters: {
-      status: {
-        $ne: 'inactive',
+      tenant_name: {
+        $eq: code,
       },
-      $or: [
-        {
-          name: {
-            $eq: code,
-          },
+      tenant: {
+        status: {
+          $ne: 'inactive',
         },
-        {
-          slug: {
-            $eq: code,
-          },
-        },
-        {
-          app_display_name: {
-            $eq: code,
-          },
-        },
-      ],
+      },
     },
-    fields: ['id', 'name', 'slug', 'app_api_key', 'status', 'app_display_name'],
+    fields: ['id', 'admin_email', 'tenant_name', 'qr_token', 'qr_code_url'],
+    populate: {
+      tenant: {
+        fields: [
+          'id',
+          'name',
+          'slug',
+          'app_api_key',
+          'status',
+          'app_display_name',
+          'primary_color',
+          'support_email',
+          'android_apk_url',
+        ],
+      },
+    },
     limit: 1,
   });
 
-  return exactMatch[0] || null;
+  const tenantAdmin = tenantAdmins[0] || null;
+  if (!tenantAdmin?.tenant) {
+    return null;
+  }
+
+  return {
+    tenant: tenantAdmin.tenant,
+    tenantAdmin: {
+      id: tenantAdmin.id,
+      admin_email: tenantAdmin.admin_email || null,
+      tenant_name: tenantAdmin.tenant_name || code,
+      qr_token: tenantAdmin.qr_token || null,
+      qr_code_url: tenantAdmin.qr_code_url || null,
+    },
+  };
 };
 
 const findTenantLaunchByQrToken = async (strapi, qrToken) => {
@@ -351,8 +368,8 @@ module.exports = {
   buildTenantLocalImagePath,
   buildTenantUserImagePrefix,
   findTenantByApiKey,
-  findTenantByReferralCode,
   findTenantLaunchByQrToken,
+  findTenantLaunchByReferralCode,
   getAdminTenantContext,
   getContactTenantId,
   getStorageTenantSegment,
