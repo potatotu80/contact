@@ -1229,6 +1229,16 @@ const ensureAbsoluteUrl = (value) => {
   return /^https?:\/\//i.test(normalized) ? normalized : '';
 };
 
+const buildTenantAdminReferralCode = ({ tenantCode, tenantAdminName }) => {
+  const normalizedTenantCode = String(tenantCode || '').trim();
+  const normalizedTenantAdminName = String(tenantAdminName || '').trim();
+  if (!normalizedTenantCode || !normalizedTenantAdminName) {
+    return '';
+  }
+
+  return `${normalizedTenantCode}:${normalizedTenantAdminName}`;
+};
+
 const buildTenantDeepLinkUrl = ({ tenantCode, referralCode, qrToken }) => {
   const scheme = getSharedDeepLinkScheme();
   if (!scheme) {
@@ -2179,7 +2189,10 @@ module.exports = {
           }))[0];
 
           const effectiveReferralCode = String(
-            referralCode || launchContext?.tenantAdmin?.tenant_name || ''
+            referralCode || buildTenantAdminReferralCode({
+              tenantCode: launchContext?.tenant?.slug || tenant?.slug || tenantCode,
+              tenantAdminName: launchContext?.tenantAdmin?.tenant_name || '',
+            }) || ''
           ).trim();
 
           if (!tenant) {

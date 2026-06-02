@@ -33,22 +33,61 @@ const findTenantByApiKey = async (strapi, apiKey) => {
   return tenants[0] || null;
 };
 
+const splitReferralCode = (referralCode) => {
+  const code = String(referralCode || '').trim();
+  if (!code) {
+    return {
+      tenantCode: '',
+      tenantAdminName: '',
+    };
+  }
+
+  const separatorIndex = code.indexOf(':');
+  if (separatorIndex < 0) {
+    return {
+      tenantCode: '',
+      tenantAdminName: code,
+    };
+  }
+
+  return {
+    tenantCode: code.slice(0, separatorIndex).trim(),
+    tenantAdminName: code.slice(separatorIndex + 1).trim(),
+  };
+};
+
 const findTenantLaunchByReferralCode = async (strapi, referralCode) => {
   const code = String(referralCode || '').trim();
   if (!code) {
     return null;
   }
 
+  const { tenantCode, tenantAdminName } = splitReferralCode(code);
+  const normalizedAdminName = String(tenantAdminName || code).trim();
+
   const tenantAdmins = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
     filters: {
       tenant_name: {
-        $eq: code,
+        $eq: normalizedAdminName,
       },
-      tenant: {
-        status: {
-          $ne: 'inactive',
-        },
-      },
+      ...(tenantCode
+        ? {
+            tenant: {
+              slug: {
+                $eq: tenantCode,
+              },
+              status: {
+                $ne: 'inactive',
+              },
+            },
+          }
+        : {
+            tenant: {
+              status: {
+                $ne: 'inactive',
+              },
+            },
+          }),
     },
     fields: ['id', 'admin_email', 'tenant_name', 'qr_token', 'qr_code_url'],
     populate: {
@@ -79,7 +118,7 @@ const findTenantLaunchByReferralCode = async (strapi, referralCode) => {
     tenantAdmin: {
       id: tenantAdmin.id,
       admin_email: tenantAdmin.admin_email || null,
-      tenant_name: tenantAdmin.tenant_name || code,
+      tenant_name: tenantAdmin.tenant_name || normalizedAdminName,
       qr_token: tenantAdmin.qr_token || null,
       qr_code_url: tenantAdmin.qr_code_url || null,
     },

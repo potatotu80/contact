@@ -117,10 +117,12 @@ const assertUniqueTenantAdminMapping = async ({
 
 const assertUniqueTenantAdminName = async ({
   tenantAdminName,
+  tenantId,
   currentRecordId,
 }) => {
   const normalizedName = String(tenantAdminName || '').trim();
-  if (!normalizedName) {
+  const normalizedTenantId = Number(tenantId) || 0;
+  if (!normalizedName || !normalizedTenantId) {
     return;
   }
 
@@ -136,6 +138,11 @@ const assertUniqueTenantAdminName = async ({
             },
           }
         : {}),
+      tenant: {
+        id: {
+          $eq: normalizedTenantId,
+        },
+      },
     },
     fields: ['id', 'tenant_name', 'admin_email'],
     limit: 1,
@@ -146,7 +153,7 @@ const assertUniqueTenantAdminName = async ({
   }
 
   throw new ValidationError(
-    `Tenant Admin Name "${normalizedName}" is already in use. Please choose a unique Tenant Admin Name because it is used as the referral code.`
+    `Tenant Admin Name "${normalizedName}" is already in use for this tenant. Please choose a unique Tenant Admin Name because the referral code uses the combination of Tenant Slug and Tenant Admin Name.`
   );
 };
 
@@ -247,6 +254,7 @@ const syncAdminSnapshot = async (event) => {
 
   await assertUniqueTenantAdminName({
     tenantAdminName: data.tenant_name,
+    tenantId: tenant.id,
     currentRecordId: existingRecordId,
   });
 
