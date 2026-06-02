@@ -1,6 +1,6 @@
 'use strict';
 
-const { findTenantByApiKey, findTenantLaunchByQrToken } = require('../utils/tenant-access');
+const { findTenantByApiKey, findTenantByReferralCode, findTenantLaunchByQrToken } = require('../utils/tenant-access');
 
 const getClientIp = (ctx) => {
   const forwardedFor = ctx.request.headers['x-forwarded-for'];
@@ -55,6 +55,12 @@ module.exports = async (policyContext, _config, { strapi }) => {
   const bearerToken = authHeader.startsWith(bearerPrefix)
     ? authHeader.slice(bearerPrefix.length).trim()
     : '';
+  const referralCode = String(
+    policyContext.request.body?.referralCode
+    || policyContext.request.query?.referralCode
+    || policyContext.request.headers['x-referral-code']
+    || ''
+  ).trim();
 
   const presentedKey = qrTokenHeader || headerKey || bearerToken;
 
@@ -63,7 +69,7 @@ module.exports = async (policyContext, _config, { strapi }) => {
     return true;
   }
 
-  if (!presentedKey) {
+  if (!presentedKey && !referralCode) {
     strapi.log.warn(
       `[app-api-key] Missing tenant API key for ${policyContext.request.method} ${policyContext.request.path} ` +
       `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
@@ -74,11 +80,14 @@ module.exports = async (policyContext, _config, { strapi }) => {
   const launchContext = qrTokenHeader
     ? await findTenantLaunchByQrToken(strapi, qrTokenHeader)
     : null;
-  const tenant = launchContext?.tenant || await findTenantByApiKey(strapi, presentedKey);
+  const tenant =
+    launchContext?.tenant
+    || await findTenantByApiKey(strapi, presentedKey)
+    || await findTenantByReferralCode(strapi, referralCode);
   if (tenant) {
     strapi.log.info(
       `[app-api-key] Accepted ${policyContext.request.method} ${policyContext.request.path} ` +
-      `tenant=${tenant.slug || tenant.id} key=${maskKey(presentedKey)} ` +
+      `tenant=${tenant.slug || tenant.id} key=${maskKey(presentedKey || referralCode)} ` +
       `from ${getClientIp(policyContext)} user-agent="${policyContext.request.headers['user-agent'] || 'unknown'}"`
     );
     policyContext.state.appTenant = tenant;

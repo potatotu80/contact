@@ -1277,9 +1277,10 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
   const primaryColor = /^#[0-9A-Fa-f]{6}$/.test(String(tenant?.primary_color || '').trim())
     ? tenant.primary_color
     : '#2F6BFF';
+  const resolvedReferralCode = String(referralCode || tenant?.name || tenant?.app_display_name || '').trim();
   const installUrl = ensureAbsoluteUrl(tenant?.android_apk_url);
-  const deepLinkUrl = buildTenantDeepLinkUrl({ tenantCode, referralCode, qrToken });
-  const intentUrl = buildTenantIntentUrl({ tenantCode, referralCode, qrToken });
+  const deepLinkUrl = buildTenantDeepLinkUrl({ tenantCode, referralCode: resolvedReferralCode, qrToken });
+  const intentUrl = buildTenantIntentUrl({ tenantCode, referralCode: resolvedReferralCode, qrToken });
   const safeMessage = escapeHtml('Please open this link on an Android device.');
 
   return `<!doctype html>
@@ -1363,6 +1364,46 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         margin-top: 12px;
         font-size: 13px;
       }
+      .referral-box {
+        margin-top: 18px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        background: #f5f7fb;
+        border: 1px solid var(--border);
+      }
+      .referral-title {
+        margin: 0 0 6px;
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .referral-copy-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 12px;
+      }
+      .referral-code {
+        flex: 1;
+        min-width: 0;
+        margin: 0;
+        padding: 12px 14px;
+        border-radius: 12px;
+        background: #fff;
+        border: 1px solid var(--border);
+        color: #34415e;
+        font-weight: 700;
+        word-break: break-word;
+      }
+      .copy-button {
+        border: 1px solid var(--border);
+        background: #fff;
+        color: var(--primary);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
         code {
           display: block;
           margin-top: 20px;
@@ -1400,6 +1441,15 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       <p class="eyebrow">${appName}</p>
       <h1>Open in app</h1>
       <p id="message">Open the app if it is already installed, or install the latest Android app below.</p>
+      ${resolvedReferralCode ? `
+      <div class="referral-box">
+        <p class="referral-title">First time installing?</p>
+        <p>If the app does not capture your invitation automatically, copy this Referral Code and enter it on the Phone Verification page.</p>
+        <div class="referral-copy-row">
+          <p class="referral-code" id="referralCodeValue">${escapeHtml(resolvedReferralCode)}</p>
+          <button class="copy-button" id="copyReferralButton" type="button">Copy</button>
+        </div>
+      </div>` : ''}
       <p class="status" id="status"></p>
       <div class="action-box" id="openAppBox" style="${(intentUrl || deepLinkUrl) ? 'display:block;' : 'display:none;'}">
         <a class="install-button" id="openIntentButton" href="${escapeHtml(intentUrl || deepLinkUrl)}">Open app</a>
@@ -1425,6 +1475,8 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           var installButton = document.getElementById("installButton");
           var openAppBox = document.getElementById("openAppBox");
           var openIntentButton = document.getElementById("openIntentButton");
+          var copyReferralButton = document.getElementById("copyReferralButton");
+          var referralCodeValue = document.getElementById("referralCodeValue");
           var message = document.getElementById("message");
           var status = document.getElementById("status");
           var hasLeftPage = false;
@@ -1469,6 +1521,40 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           status.textContent = installUrl
             ? "Trying to open the app now. If it stays on this page, use Open app."
             : "Trying to open the app now. This tenant currently has no APK download URL configured.";
+
+          if (copyReferralButton && referralCodeValue) {
+            copyReferralButton.addEventListener("click", async function () {
+              var referralText = referralCodeValue.textContent || "";
+              if (!referralText) {
+                return;
+              }
+
+              try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  await navigator.clipboard.writeText(referralText);
+                } else {
+                  var temp = document.createElement("textarea");
+                  temp.value = referralText;
+                  temp.setAttribute("readonly", "");
+                  temp.style.position = "absolute";
+                  temp.style.left = "-9999px";
+                  document.body.appendChild(temp);
+                  temp.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(temp);
+                }
+                copyReferralButton.textContent = "Copied";
+                window.setTimeout(function () {
+                  copyReferralButton.textContent = "Copy";
+                }, 1800);
+              } catch (error) {
+                copyReferralButton.textContent = "Copy failed";
+                window.setTimeout(function () {
+                  copyReferralButton.textContent = "Copy";
+                }, 1800);
+              }
+            });
+          }
 
           document.addEventListener("visibilitychange", function () {
             if (document.visibilityState === "hidden") {

@@ -33,6 +33,42 @@ const findTenantByApiKey = async (strapi, apiKey) => {
   return tenants[0] || null;
 };
 
+const findTenantByReferralCode = async (strapi, referralCode) => {
+  const code = String(referralCode || '').trim();
+  if (!code) {
+    return null;
+  }
+
+  const exactMatch = await strapi.entityService.findMany(APP_TENANT_UID, {
+    filters: {
+      status: {
+        $ne: 'inactive',
+      },
+      $or: [
+        {
+          name: {
+            $eq: code,
+          },
+        },
+        {
+          slug: {
+            $eq: code,
+          },
+        },
+        {
+          app_display_name: {
+            $eq: code,
+          },
+        },
+      ],
+    },
+    fields: ['id', 'name', 'slug', 'app_api_key', 'status', 'app_display_name'],
+    limit: 1,
+  });
+
+  return exactMatch[0] || null;
+};
+
 const findTenantLaunchByQrToken = async (strapi, qrToken) => {
   const token = String(qrToken || '').trim();
   if (!token) {
@@ -315,6 +351,7 @@ module.exports = {
   buildTenantLocalImagePath,
   buildTenantUserImagePrefix,
   findTenantByApiKey,
+  findTenantByReferralCode,
   findTenantLaunchByQrToken,
   getAdminTenantContext,
   getContactTenantId,
