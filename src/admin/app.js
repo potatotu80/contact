@@ -1983,7 +1983,62 @@ const config = {
   locales: [],
 };
 
+const SETTINGS_USERS_PATH = '/admin/settings/users';
+
+const syncSettingsUsersQuery = () => {
+  if (!window.location.pathname.startsWith(SETTINGS_USERS_PATH)) {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  let changed = false;
+
+  if (url.searchParams.get('sort') !== 'id:desc') {
+    url.searchParams.set('sort', 'id:desc');
+    changed = true;
+  }
+
+  if (!url.searchParams.get('pageSize')) {
+    url.searchParams.set('pageSize', '10');
+    changed = true;
+  }
+
+  if (!url.searchParams.get('page')) {
+    url.searchParams.set('page', '1');
+    changed = true;
+  }
+
+  if (changed) {
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  }
+};
+
+const installSettingsUsersSortGuard = () => {
+  if (typeof window === 'undefined' || window.__settingsUsersSortGuardInstalled) {
+    return;
+  }
+
+  window.__settingsUsersSortGuardInstalled = true;
+  syncSettingsUsersQuery();
+
+  const wrapHistoryMethod = (methodName) => {
+    const original = window.history[methodName];
+    window.history[methodName] = function wrappedHistoryMethod(...args) {
+      const result = original.apply(this, args);
+      window.setTimeout(syncSettingsUsersQuery, 0);
+      return result;
+    };
+  };
+
+  wrapHistoryMethod('pushState');
+  wrapHistoryMethod('replaceState');
+  window.addEventListener('popstate', syncSettingsUsersQuery);
+};
+
 const bootstrap = (app) => {
+  installSettingsUsersSortGuard();
+
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'voice-call-panel',
     Component: VoiceCallPanel,
