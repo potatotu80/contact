@@ -1236,7 +1236,7 @@ const buildTenantAdminReferralCode = ({ tenantCode, tenantAdminName }) => {
     return '';
   }
 
-  return `${normalizedTenantCode}:${normalizedTenantAdminName}`;
+  return `${normalizedTenantCode}${normalizedTenantAdminName}`;
 };
 
 const buildTenantDeepLinkUrl = ({ tenantCode, referralCode, qrToken }) => {

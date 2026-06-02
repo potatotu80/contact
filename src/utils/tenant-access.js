@@ -56,6 +56,16 @@ const splitReferralCode = (referralCode) => {
   };
 };
 
+const formatCombinedReferralCode = (tenantCode, tenantAdminName) => {
+  const normalizedTenantCode = String(tenantCode || '').trim();
+  const normalizedTenantAdminName = String(tenantAdminName || '').trim();
+  if (!normalizedTenantCode || !normalizedTenantAdminName) {
+    return '';
+  }
+
+  return `${normalizedTenantCode}${normalizedTenantAdminName}`;
+};
+
 const findTenantLaunchByReferralCode = async (strapi, referralCode) => {
   const code = String(referralCode || '').trim();
   if (!code) {
@@ -65,7 +75,7 @@ const findTenantLaunchByReferralCode = async (strapi, referralCode) => {
   const { tenantCode, tenantAdminName } = splitReferralCode(code);
   const normalizedAdminName = String(tenantAdminName || code).trim();
 
-  const tenantAdmins = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+  let tenantAdmins = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
     filters: {
       tenant_name: {
         $eq: normalizedAdminName,
@@ -107,6 +117,39 @@ const findTenantLaunchByReferralCode = async (strapi, referralCode) => {
     },
     limit: 1,
   });
+
+  if (!tenantAdmins[0] && !tenantCode) {
+    tenantAdmins = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+      filters: {
+        tenant: {
+          status: {
+            $ne: 'inactive',
+          },
+        },
+      },
+      fields: ['id', 'admin_email', 'tenant_name', 'qr_token', 'qr_code_url'],
+      populate: {
+        tenant: {
+          fields: [
+            'id',
+            'name',
+            'slug',
+            'app_api_key',
+            'status',
+            'app_display_name',
+            'primary_color',
+            'support_email',
+            'android_apk_url',
+          ],
+        },
+      },
+      limit: 500,
+    });
+
+    tenantAdmins = tenantAdmins.filter((entry) => (
+      formatCombinedReferralCode(entry?.tenant?.slug, entry?.tenant_name) === code
+    ));
+  }
 
   const tenantAdmin = tenantAdmins[0] || null;
   if (!tenantAdmin?.tenant) {
