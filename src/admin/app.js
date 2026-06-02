@@ -10,6 +10,7 @@ const APP_USER_UID = 'api::app-user.app-user';
 const CONTACT_UID = 'api::contact.contact';
 const TENANT_UID = 'api::tenant.tenant';
 const TENANT_ADMIN_UID = 'api::tenant-admin.tenant-admin';
+const SHARED_APP_UID = 'api::shared-app.shared-app';
 const S3_BUCKET = process.env.STRAPI_ADMIN_R2_BUCKET || process.env.STRAPI_ADMIN_S3_BUCKET || 'yengtesting';
 const S3_REGION = process.env.STRAPI_ADMIN_R2_REGION || process.env.STRAPI_ADMIN_S3_REGION || 'auto';
 const S3_IMAGES_PREFIX = process.env.STRAPI_ADMIN_S3_IMAGES_PREFIX || 'users';
@@ -111,6 +112,16 @@ const formatCallDuration = (seconds) => {
   return [minutes, remainingSeconds]
     .map((value) => String(value).padStart(2, '0'))
     .join(':');
+};
+
+const extractSharedAppVoiceEnabled = (response) => {
+  const payload = response?.data?.data || response?.data || {};
+  const attributes = payload?.attributes || payload;
+  if (typeof attributes?.enable_twilio_voice_panel === 'boolean') {
+    return attributes.enable_twilio_voice_panel;
+  }
+
+  return true;
 };
 
 const GalleryPreview = ({ items }) => {
@@ -369,6 +380,8 @@ const VoiceCallPanel = () => {
   const callRef = useRef(null);
   const acceptedAtRef = useRef(null);
   const timerRef = useRef(null);
+  const [isVoicePanelEnabled, setIsVoicePanelEnabled] = useState(true);
+  const [isVoicePanelLoading, setIsVoicePanelLoading] = useState(true);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
@@ -386,7 +399,34 @@ const VoiceCallPanel = () => {
     deviceRef.current?.destroy?.();
   }, []);
 
-  if (!supportedSlug || !phone) return null;
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSharedAppConfig = async () => {
+      try {
+        setIsVoicePanelLoading(true);
+        const response = await get(`/content-manager/single-types/${SHARED_APP_UID}`);
+        if (!isMounted) return;
+
+        setIsVoicePanelEnabled(extractSharedAppVoiceEnabled(response));
+      } catch (_error) {
+        if (!isMounted) return;
+        setIsVoicePanelEnabled(true);
+      } finally {
+        if (isMounted) {
+          setIsVoicePanelLoading(false);
+        }
+      }
+    };
+
+    loadSharedAppConfig();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [get]);
+
+  if (!supportedSlug || !phone || isVoicePanelLoading || !isVoicePanelEnabled) return null;
 
   const stopDurationTimer = () => {
     if (timerRef.current) {

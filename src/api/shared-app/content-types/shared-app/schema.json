@@ -23,6 +23,10 @@
     },
     "notes": {
       "type": "text"
+    },
+    "enable_twilio_voice_panel": {
+      "type": "boolean",
+      "default": true
     }
   }
 }
