@@ -43,6 +43,29 @@ const resolveQrInstallBaseUrl = () =>
     .trim()
     .replace(/\/$/, '');
 
+const parseTenantAdminQrCodeUrl = (value) => {
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedValue) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(normalizedValue);
+    if (parsed.pathname !== '/qr-install') {
+      return null;
+    }
+
+    return {
+      qrToken: String(parsed.searchParams.get('qrToken') || '').trim(),
+      tenantCode: String(parsed.searchParams.get('tenantCode') || '').trim(),
+      referralCode: String(parsed.searchParams.get('referralCode') || '').trim(),
+      origin: parsed.origin,
+    };
+  } catch (error) {
+    return null;
+  }
+};
+
 const buildQrCodeUrl = (slug) => {
   const normalizedSlug = String(slug || '').trim();
   const baseUrl = resolveQrInstallBaseUrl();
@@ -77,7 +100,7 @@ const getTenantStrapi = () => global.strapi;
 
 const syncTenantAdminQrCodeUrls = async ({ previousSlug, tenantId }) => {
   const strapi = getTenantStrapi();
-  if (!strapi || !tenantId || !previousSlug) {
+  if (!strapi || !tenantId) {
     return;
   }
 
@@ -86,7 +109,7 @@ const syncTenantAdminQrCodeUrls = async ({ previousSlug, tenantId }) => {
   });
 
   const nextTenantSlug = String(tenant?.slug || '').trim();
-  if (!nextTenantSlug || nextTenantSlug === previousSlug) {
+  if (!nextTenantSlug) {
     return;
   }
 
@@ -109,18 +132,31 @@ const syncTenantAdminQrCodeUrls = async ({ previousSlug, tenantId }) => {
       continue;
     }
 
-    if (
-      !isGeneratedTenantAdminQrCodeUrl(currentQrCodeUrl, {
+    const parsedQrCodeUrl = parseTenantAdminQrCodeUrl(currentQrCodeUrl);
+    const currentTenantCode = String(parsedQrCodeUrl?.tenantCode || '').trim();
+    const referralCode = String(parsedQrCodeUrl?.referralCode || '').trim();
+    const generatedFromPreviousSlug = previousSlug
+      && isGeneratedTenantAdminQrCodeUrl(currentQrCodeUrl, {
         qrToken,
         tenantCode: previousSlug,
-      })
-    ) {
+      });
+    const generatedFromCurrentUrl =
+      parsedQrCodeUrl
+      && parsedQrCodeUrl.qrToken === qrToken
+      && currentTenantCode;
+
+    if (!generatedFromPreviousSlug && !generatedFromCurrentUrl) {
+      continue;
+    }
+
+    if (currentTenantCode === nextTenantSlug) {
       continue;
     }
 
     const nextQrCodeUrl = buildTenantAdminQrCodeUrl({
       qrToken,
       tenantCode: nextTenantSlug,
+      referralCode,
     });
 
     if (!nextQrCodeUrl || nextQrCodeUrl === currentQrCodeUrl) {
