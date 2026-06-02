@@ -2024,6 +2024,7 @@ const config = {
 };
 
 const SETTINGS_USERS_PATH = '/admin/settings/users';
+const TENANT_ADMIN_LIST_PATH = `/admin/content-manager/collectionType/${TENANT_ADMIN_UID}`;
 
 const syncSettingsUsersQuery = () => {
   if (!window.location.pathname.startsWith(SETTINGS_USERS_PATH)) {
@@ -2066,8 +2067,49 @@ const installSettingsUsersSortGuard = () => {
   window.addEventListener('popstate', syncSettingsUsersQuery);
 };
 
+const syncTenantAdminListQuery = () => {
+  if (!window.location.pathname.startsWith(TENANT_ADMIN_LIST_PATH)) {
+    return;
+  }
+
+  const url = new URL(window.location.href);
+  let changed = false;
+
+  if (url.searchParams.get('sort') !== 'id:desc') {
+    url.searchParams.set('sort', 'id:desc');
+    changed = true;
+  }
+
+  if (changed) {
+    window.history.replaceState({}, '', url.toString());
+  }
+};
+
+const installTenantAdminListSortGuard = () => {
+  if (typeof window === 'undefined' || window.__tenantAdminListSortGuardInstalled) {
+    return;
+  }
+
+  window.__tenantAdminListSortGuardInstalled = true;
+  syncTenantAdminListQuery();
+
+  const wrapHistoryMethod = (methodName) => {
+    const original = window.history[methodName];
+    window.history[methodName] = function wrappedHistoryMethod(...args) {
+      const result = original.apply(this, args);
+      window.setTimeout(syncTenantAdminListQuery, 0);
+      return result;
+    };
+  };
+
+  wrapHistoryMethod('pushState');
+  wrapHistoryMethod('replaceState');
+  window.addEventListener('popstate', syncTenantAdminListQuery);
+};
+
 const bootstrap = (app) => {
   installSettingsUsersSortGuard();
+  installTenantAdminListSortGuard();
 
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'voice-call-panel',
