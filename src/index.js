@@ -1533,19 +1533,23 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
                 referralCodeValue.focus();
                 referralCodeValue.select();
                 referralCodeValue.setSelectionRange(0, referralText.length);
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                  await navigator.clipboard.writeText(referralText);
-                } else {
-                  var temp = document.createElement("textarea");
-                  temp.value = referralText;
-                  temp.setAttribute("readonly", "");
-                  temp.style.position = "absolute";
-                  temp.style.left = "-9999px";
-                  document.body.appendChild(temp);
-                  temp.select();
-                  document.execCommand("copy");
-                  document.body.removeChild(temp);
+                var copied = false;
+
+                try {
+                  copied = document.execCommand("copy");
+                } catch (legacyError) {
+                  copied = false;
                 }
+
+                if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
+                  await navigator.clipboard.writeText(referralText);
+                  copied = true;
+                }
+
+                if (!copied) {
+                  throw new Error("Clipboard unavailable");
+                }
+
                 copyReferralButton.textContent = "Copied";
                 window.setTimeout(function () {
                   copyReferralButton.textContent = "Copy";
@@ -1554,10 +1558,10 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
                 referralCodeValue.focus();
                 referralCodeValue.select();
                 referralCodeValue.setSelectionRange(0, referralText.length);
-                copyReferralButton.textContent = "Select and copy";
+                copyReferralButton.textContent = "Long press to copy";
                 window.setTimeout(function () {
                   copyReferralButton.textContent = "Copy";
-                }, 2200);
+                }, 2500);
               }
             });
           }
