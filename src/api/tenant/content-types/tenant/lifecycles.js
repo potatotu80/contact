@@ -1,9 +1,14 @@
 'use strict';
 
 const { generateTenantApiKey, isGeneratedTenantApiKey } = require('../../../../utils/tenant-api-key');
+const {
+  buildTenantAdminQrCodeUrl,
+  isGeneratedTenantAdminQrCodeUrl,
+} = require('../../../../utils/app-launch');
 
 const MANAGED_API_KEY_PLACEHOLDER = 'Auto-generated on save';
 const TENANT_UID = 'api::tenant.tenant';
+const TENANT_ADMIN_UID = 'api::tenant-admin.tenant-admin';
 const TENANT_FIELDS = ['id', 'slug', 'qr_code_url', 'android_apk_url'];
 
 const deriveDeepLinkScheme = (value) => {
@@ -69,6 +74,69 @@ const resolveAbsoluteMediaUrl = (value) => {
 };
 
 const getTenantStrapi = () => global.strapi;
+
+const syncTenantAdminQrCodeUrls = async ({ previousSlug, tenantId }) => {
+  const strapi = getTenantStrapi();
+  if (!strapi || !tenantId || !previousSlug) {
+    return;
+  }
+
+  const tenant = await strapi.entityService.findOne(TENANT_UID, tenantId, {
+    fields: ['id', 'slug'],
+  });
+
+  const nextTenantSlug = String(tenant?.slug || '').trim();
+  if (!nextTenantSlug || nextTenantSlug === previousSlug) {
+    return;
+  }
+
+  const tenantAdmins = await strapi.db.query(TENANT_ADMIN_UID).findMany({
+    where: {
+      tenant: {
+        id: {
+          $eq: tenantId,
+        },
+      },
+    },
+    select: ['id', 'qr_token', 'qr_code_url'],
+  });
+
+  for (const tenantAdmin of tenantAdmins) {
+    const qrToken = String(tenantAdmin.qr_token || '').trim();
+    const currentQrCodeUrl = String(tenantAdmin.qr_code_url || '').trim();
+
+    if (!qrToken || !currentQrCodeUrl) {
+      continue;
+    }
+
+    if (
+      !isGeneratedTenantAdminQrCodeUrl(currentQrCodeUrl, {
+        qrToken,
+        tenantCode: previousSlug,
+      })
+    ) {
+      continue;
+    }
+
+    const nextQrCodeUrl = buildTenantAdminQrCodeUrl({
+      qrToken,
+      tenantCode: nextTenantSlug,
+    });
+
+    if (!nextQrCodeUrl || nextQrCodeUrl === currentQrCodeUrl) {
+      continue;
+    }
+
+    await strapi.db.query(TENANT_ADMIN_UID).update({
+      where: {
+        id: tenantAdmin.id,
+      },
+      data: {
+        qr_code_url: nextQrCodeUrl,
+      },
+    });
+  }
+};
 
 const syncAndroidApkUrl = async (tenantId) => {
   const strapi = getTenantStrapi();
@@ -174,6 +242,9 @@ const ensureTenantApiKeyOnUpdate = async (event) => {
     return;
   }
 
+  event.state = event.state || {};
+  event.state.existingTenant = existingTenant;
+
   const nextSlug = String(data.slug || existingTenant.slug || data.name || '').trim();
   if (!nextSlug) {
     return;
@@ -207,5 +278,9 @@ module.exports = {
   async afterUpdate(event) {
     const tenantId = event.result?.id || event.params?.where?.id;
     await syncAndroidApkUrl(tenantId);
+    await syncTenantAdminQrCodeUrls({
+      previousSlug: String(event.state?.existingTenant?.slug || '').trim(),
+      tenantId,
+    });
   },
 };
