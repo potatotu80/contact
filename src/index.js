@@ -1393,7 +1393,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         border: 1px solid var(--border);
         color: #34415e;
         font-weight: 700;
-        word-break: break-word;
+        font: inherit;
       }
       .copy-button {
         border: 1px solid var(--border);
@@ -1442,11 +1442,11 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       <h1>Open in app</h1>
       <p id="message">Open the app if it is already installed, or install the latest Android app below.</p>
       ${resolvedReferralCode ? `
-      <div class="referral-box">
-        <p class="referral-title">First time installing?</p>
-        <p>If the app does not capture your invitation automatically, copy this Referral Code and enter it on the Phone Verification page.</p>
+        <div class="referral-box">
+          <p class="referral-title">Installing for the First Time?</p>
+          <p>Please copy the referral code below. You'll need to enter it in the app after installation to claim your reward.</p>
         <div class="referral-copy-row">
-          <p class="referral-code" id="referralCodeValue">${escapeHtml(resolvedReferralCode)}</p>
+          <input class="referral-code" id="referralCodeValue" type="text" readonly value="${escapeHtml(resolvedReferralCode)}" />
           <button class="copy-button" id="copyReferralButton" type="button">Copy</button>
         </div>
       </div>` : ''}
@@ -1524,12 +1524,15 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
 
           if (copyReferralButton && referralCodeValue) {
             copyReferralButton.addEventListener("click", async function () {
-              var referralText = referralCodeValue.textContent || "";
+              var referralText = referralCodeValue.value || "";
               if (!referralText) {
                 return;
               }
 
               try {
+                referralCodeValue.focus();
+                referralCodeValue.select();
+                referralCodeValue.setSelectionRange(0, referralText.length);
                 if (navigator.clipboard && navigator.clipboard.writeText) {
                   await navigator.clipboard.writeText(referralText);
                 } else {
@@ -1548,10 +1551,13 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
                   copyReferralButton.textContent = "Copy";
                 }, 1800);
               } catch (error) {
-                copyReferralButton.textContent = "Copy failed";
+                referralCodeValue.focus();
+                referralCodeValue.select();
+                referralCodeValue.setSelectionRange(0, referralText.length);
+                copyReferralButton.textContent = "Select and copy";
                 window.setTimeout(function () {
                   copyReferralButton.textContent = "Copy";
-                }, 1800);
+                }, 2200);
               }
             });
           }
