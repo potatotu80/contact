@@ -1998,16 +1998,6 @@ const syncSettingsUsersQuery = () => {
     changed = true;
   }
 
-  if (!url.searchParams.get('pageSize')) {
-    url.searchParams.set('pageSize', '10');
-    changed = true;
-  }
-
-  if (!url.searchParams.get('page')) {
-    url.searchParams.set('page', '1');
-    changed = true;
-  }
-
   if (changed) {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
     window.dispatchEvent(new PopStateEvent('popstate'));
