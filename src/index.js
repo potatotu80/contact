@@ -1406,7 +1406,6 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       </div>
       <div class="action-box" id="installBox" style="${installUrl ? 'display:block;' : 'display:none;'}">
         <a class="install-button secondary" id="installButton" href="${escapeHtml(installUrl)}" download>Install Android app</a>
-        <p class="hint">Need the app? Install Android app.</p>
       </div>
       </main>
       <script>
@@ -1468,7 +1467,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           }
 
           status.textContent = installUrl
-            ? "Trying to open the app now. If it stays on this page, use Open app or Install Android app."
+            ? "Trying to open the app now. If it stays on this page, use Open app."
             : "Trying to open the app now. This tenant currently has no APK download URL configured.";
 
           document.addEventListener("visibilitychange", function () {
