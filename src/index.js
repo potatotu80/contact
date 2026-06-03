@@ -873,6 +873,8 @@ const syncTenantAdminListConfiguration = async (strapi) => {
     settings: {
       ...(configuration.settings || {}),
       mainField: 'tenant_name',
+      defaultSortBy: 'id',
+      defaultSortOrder: 'DESC',
     },
     layouts: {
       ...(configuration.layouts || {}),
