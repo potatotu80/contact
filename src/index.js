@@ -2013,6 +2013,10 @@ module.exports = {
       }
 
       if (slug === APP_TENANT_UID) {
+        if (ctx.method === 'GET' && isContentManagerConfigurationRequest(ctx.request.path || '')) {
+          return next();
+        }
+
         const entityId = getContentManagerEntityId(ctx.request.path || '');
 
         if (ctx.method === 'GET' && !entityId) {
