@@ -751,7 +751,12 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
 
     const { findUserPermissions, sanitizePermission } = strapi.admin.services.permission;
     const userPermissions = await findUserPermissions(adminUser);
-    const hiddenSubjects = new Set([APP_TENANT_UID, SHARED_APP_UID]);
+    const hiddenSubjects = new Set([
+      APP_TENANT_UID,
+      SHARED_APP_UID,
+      'plugin::upload.file',
+      'plugin::upload.folder',
+    ]);
     const visiblePermissions = userPermissions.filter(
       (permission) => !hiddenSubjects.has(permission.subject)
     );
