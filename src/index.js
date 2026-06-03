@@ -629,38 +629,6 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       return;
     }
 
-    if (model === APP_TENANT_ADMIN_UID) {
-      const entity = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
-        filters: {
-          id: {
-            $eq: entityId,
-          },
-          admin_user_id: {
-            $eq: adminUser.id,
-          },
-          tenant: {
-            id: {
-              $in: tenantContext.tenantIds,
-            },
-          },
-        },
-        fields: Object.keys(strapi.getModel(APP_TENANT_ADMIN_UID)?.attributes || {}),
-        populate: {
-          tenant: {
-            fields: ['id', 'name', 'slug'],
-          },
-        },
-        limit: 1,
-      });
-
-      if (!entity[0]) {
-        return ctx.forbidden('This tenant admin record is outside your scope.');
-      }
-
-      ctx.body = entity[0];
-      return;
-    }
-
     const scopedEntity = await assertScopedAdminRecord(strapi, tenantContext, model, entityId);
 
     if (!scopedEntity) {
@@ -783,8 +751,11 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
 
     const { findUserPermissions, sanitizePermission } = strapi.admin.services.permission;
     const userPermissions = await findUserPermissions(adminUser);
+    const visiblePermissions = userPermissions.filter(
+      (permission) => permission.subject !== APP_TENANT_UID
+    );
 
-    const expandedPermissions = userPermissions.map((permission) => {
+    const expandedPermissions = visiblePermissions.map((permission) => {
       if (!managedSubjects.includes(permission.subject)) {
         return permission;
       }
@@ -818,6 +789,7 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
         (permission) =>
           managedSubjects.includes(permission.subject) &&
           permission.subject !== APP_TENANT_ADMIN_UID &&
+          permission.subject !== APP_TENANT_UID &&
           String(permission.action || '').endsWith('.read')
       );
 
