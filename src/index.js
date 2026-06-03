@@ -118,6 +118,10 @@ const getContentManagerEntityId = (requestPath) => {
   return parsePositiveInt(match?.[1]);
 };
 
+const isContentManagerConfigurationRequest = (requestPath) => (
+  /\/content-manager\/collection-types\/[^/]+\/configuration$/.test(String(requestPath || ''))
+);
+
 const getContentManagerRelationParams = (requestPath) => {
   const existingMatch = requestPath.match(/^\/content-manager\/relations\/([^/]+)\/(\d+)\/([^/]+)/);
   if (existingMatch) {
@@ -1974,6 +1978,10 @@ module.exports = {
       }
 
       if (slug === APP_TENANT_ADMIN_UID) {
+        if (ctx.method === 'GET' && isContentManagerConfigurationRequest(ctx.request.path || '')) {
+          return next();
+        }
+
         if (ctx.method === 'GET') {
           const entityId = getContentManagerEntityId(ctx.request.path || '');
           if (!entityId) {
