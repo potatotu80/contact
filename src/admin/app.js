@@ -116,9 +116,8 @@ const formatCallDuration = (seconds) => {
 
 const extractSharedAppVoiceEnabled = (response) => {
   const payload = response?.data?.data || response?.data || {};
-  const attributes = payload?.attributes || payload;
-  if (typeof attributes?.enable_twilio_voice_panel === 'boolean') {
-    return attributes.enable_twilio_voice_panel;
+  if (typeof payload?.enabled === 'boolean') {
+    return payload.enabled;
   }
 
   return true;
@@ -405,13 +404,13 @@ const VoiceCallPanel = () => {
     const loadSharedAppConfig = async () => {
       try {
         setIsVoicePanelLoading(true);
-        const response = await get(`/content-manager/single-types/${SHARED_APP_UID}`);
+        const response = await get('/shared-app/voice-panel-state');
         if (!isMounted) return;
 
         setIsVoicePanelEnabled(extractSharedAppVoiceEnabled(response));
       } catch (_error) {
         if (!isMounted) return;
-        setIsVoicePanelEnabled(true);
+        setIsVoicePanelEnabled(false);
       } finally {
         if (isMounted) {
           setIsVoicePanelLoading(false);

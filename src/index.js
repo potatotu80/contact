@@ -1575,7 +1575,7 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
 
 const findSharedAppConfig = async (strapi) =>
   strapi.db.query(SHARED_APP_UID).findOne({
-    select: ['id', 'android_apk_url'],
+    select: ['id', 'android_apk_url', 'enable_twilio_voice_panel'],
   });
 
 const PRIVACY_POLICY_SECTIONS = [
@@ -2249,11 +2249,31 @@ module.exports = {
 
     strapi.server.routes({
       type: 'admin',
-      routes: [
-        {
-          method: 'GET',
-          path: '/twilio/voice/token',
-          handler: async (ctx) => {
+        routes: [
+          {
+            method: 'GET',
+            path: '/shared-app/voice-panel-state',
+            handler: async (ctx) => {
+              const adminUser = await getAdminRequestUser(ctx, strapi);
+              if (!adminUser?.id) {
+                return ctx.unauthorized('Admin authentication is required.');
+              }
+
+              const sharedApp = await findSharedAppConfig(strapi);
+              ctx.body = {
+                data: {
+                  enabled: sharedApp?.enable_twilio_voice_panel !== false,
+                },
+              };
+            },
+            config: {
+              auth: false,
+            },
+          },
+          {
+            method: 'GET',
+            path: '/twilio/voice/token',
+            handler: async (ctx) => {
             const adminUser = await getAdminRequestUser(ctx, strapi);
             if (!adminUser?.id) {
               return ctx.unauthorized('Admin authentication is required.');
