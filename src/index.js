@@ -1965,30 +1965,7 @@ module.exports = {
         }
 
         if (ctx.method === 'GET') {
-          const entityId = getContentManagerEntityId(ctx.request.path || '');
-          if (!entityId) {
-            ctx.body = await buildScopedTenantAdminListResponse({
-              strapi,
-              adminUserId: adminUser.id,
-              tenantIds: tenantContext.tenantIds,
-              requestQuery: ctx.request.query,
-            });
-            return;
-          }
-
-          const tenantAdminRecord = await findScopedTenantAdminRecord({
-            strapi,
-            adminUserId: adminUser.id,
-            tenantIds: tenantContext.tenantIds,
-            entityId,
-          });
-
-          if (!tenantAdminRecord) {
-            return ctx.forbidden('This tenant admin record is outside your scope.');
-          }
-
-          ctx.body = tenantAdminRecord;
-          return;
+          return next();
         }
 
         return ctx.forbidden('Tenant admin users cannot modify tenant admin mappings.');
