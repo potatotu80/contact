@@ -1165,7 +1165,7 @@ const buildScopedTenantAdminListResponse = async ({ strapi, adminUserId, tenantI
   const pageSize = Math.max(1, Math.min(100, Number(requestQuery?.pageSize) || 10));
   const start = (page - 1) * pageSize;
   const sort = String(requestQuery?.sort || 'id:asc').toLowerCase();
-  const [results, total] = await Promise.all([
+  const [results, totalEntries] = await Promise.all([
     strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
       filters: mergedFilters,
       sort,
@@ -1177,10 +1177,13 @@ const buildScopedTenantAdminListResponse = async ({ strapi, adminUserId, tenantI
         },
       },
     }),
-    strapi.db.query(APP_TENANT_ADMIN_UID).count({
-      where: mergedFilters,
+    strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+      filters: mergedFilters,
+      fields: ['id'],
+      limit: 10000,
     }),
   ]);
+  const total = Array.isArray(totalEntries) ? totalEntries.length : 0;
 
   return {
     results,
@@ -1390,14 +1393,10 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         color: var(--text);
       }
       .referral-copy-row {
-        display: flex;
-        gap: 10px;
-        align-items: center;
         margin-top: 12px;
       }
       .referral-code {
-        flex: 1;
-        min-width: 0;
+        width: 100%;
         margin: 0;
         padding: 12px 14px;
         border-radius: 12px;
@@ -1406,15 +1405,8 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
         color: #34415e;
         font-weight: 700;
         font: inherit;
-      }
-      .copy-button {
-        border: 1px solid var(--border);
-        background: #fff;
-        color: var(--primary);
-        border-radius: 12px;
-        padding: 12px 14px;
-        font-weight: 700;
-        cursor: pointer;
+        -webkit-user-select: all;
+        user-select: all;
       }
         code {
           display: block;
@@ -1453,13 +1445,12 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
       <p class="eyebrow">${appName}</p>
       <h1>Open in app</h1>
       <p id="message">Open the app if it is already installed, or install the latest Android app below.</p>
-      ${resolvedReferralCode ? `
-        <div class="referral-box">
-          <p class="referral-title">Installing for the First Time?</p>
-          <p>Please copy the referral code below. You'll need to enter it in the app after installation to claim your reward.</p>
+        ${resolvedReferralCode ? `
+          <div class="referral-box">
+            <p class="referral-title">Installing for the First Time?</p>
+            <p>Please copy the referral code below. You'll need to enter it in the app after installation to claim your reward.</p>
         <div class="referral-copy-row">
           <input class="referral-code" id="referralCodeValue" type="text" readonly value="${escapeHtml(resolvedReferralCode)}" />
-          <button class="copy-button" id="copyReferralButton" type="button">Copy</button>
         </div>
       </div>` : ''}
       <p class="status" id="status"></p>
@@ -1487,7 +1478,6 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
           var installButton = document.getElementById("installButton");
           var openAppBox = document.getElementById("openAppBox");
           var openIntentButton = document.getElementById("openIntentButton");
-          var copyReferralButton = document.getElementById("copyReferralButton");
           var referralCodeValue = document.getElementById("referralCodeValue");
           var message = document.getElementById("message");
           var status = document.getElementById("status");
@@ -1534,48 +1524,18 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
             ? "Trying to open the app now. If it stays on this page, use Open app."
             : "Trying to open the app now. This tenant currently has no APK download URL configured.";
 
-          if (copyReferralButton && referralCodeValue) {
-            copyReferralButton.addEventListener("click", async function () {
-              var referralText = referralCodeValue.value || "";
-              if (!referralText) {
-                return;
-              }
+          if (referralCodeValue) {
+            var selectReferralCode = function () {
+              referralCodeValue.focus();
+              referralCodeValue.select();
+              referralCodeValue.setSelectionRange(0, referralCodeValue.value.length);
+            };
 
-              try {
-                referralCodeValue.focus();
-                referralCodeValue.select();
-                referralCodeValue.setSelectionRange(0, referralText.length);
-                var copied = false;
-
-                try {
-                  copied = document.execCommand("copy");
-                } catch (legacyError) {
-                  copied = false;
-                }
-
-                if (!copied && navigator.clipboard && navigator.clipboard.writeText) {
-                  await navigator.clipboard.writeText(referralText);
-                  copied = true;
-                }
-
-                if (!copied) {
-                  throw new Error("Clipboard unavailable");
-                }
-
-                copyReferralButton.textContent = "Copied";
-                window.setTimeout(function () {
-                  copyReferralButton.textContent = "Copy";
-                }, 1800);
-              } catch (error) {
-                referralCodeValue.focus();
-                referralCodeValue.select();
-                referralCodeValue.setSelectionRange(0, referralText.length);
-                copyReferralButton.textContent = "Long press to copy";
-                window.setTimeout(function () {
-                  copyReferralButton.textContent = "Copy";
-                }, 2500);
-              }
-            });
+            referralCodeValue.addEventListener("focus", selectReferralCode);
+            referralCodeValue.addEventListener("click", selectReferralCode);
+            referralCodeValue.addEventListener("touchstart", function () {
+              window.setTimeout(selectReferralCode, 0);
+            }, { passive: true });
           }
 
           document.addEventListener("visibilitychange", function () {
