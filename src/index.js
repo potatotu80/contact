@@ -470,52 +470,63 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       return ctx.forbidden('This admin user is not assigned to a tenant.');
     }
 
+    const { userAbility } = ctx.state;
+    const entityManager = strapi.plugin('content-manager').service('entity-manager');
+    const permissionChecker = strapi
+      .plugin('content-manager')
+      .service('permission-checker')
+      .create({ userAbility, model });
+
+    if (permissionChecker.cannot.read()) {
+      return ctx.forbidden();
+    }
+
     if (model === APP_TENANT_UID) {
+      const permissionQuery = await permissionChecker.sanitizedQuery.read(ctx.request.query);
+      const populate = await strapi
+        .plugin('content-manager')
+        .service('populate-builder')(model)
+        .populateDeep(1)
+        .countRelations({ toOne: false, toMany: true })
+        .build();
+
       const mergedFilters =
-        ctx.request.query?.filters && Object.keys(ctx.request.query.filters).length
+        permissionQuery.filters && Object.keys(permissionQuery.filters).length
           ? {
-              $and: [ctx.request.query.filters, { id: { $in: tenantContext.tenantIds } }],
+              $and: [permissionQuery.filters, { id: { $in: tenantContext.tenantIds } }],
             }
           : { id: { $in: tenantContext.tenantIds } };
 
-      const page = Math.max(1, Number(ctx.request.query?.page) || 1);
-      const pageSize = Math.max(1, Math.min(100, Number(ctx.request.query?.pageSize) || 10));
-      const start = (page - 1) * pageSize;
-      const sort = ctx.request.query?.sort || ['id:asc'];
-      const [results, total] = await Promise.all([
-        strapi.entityService.findMany(APP_TENANT_UID, {
+      const { results, pagination } = await entityManager.findPage(
+        {
+          ...permissionQuery,
           filters: mergedFilters,
-          fields: Object.keys(strapi.getModel(APP_TENANT_UID)?.attributes || {}),
-          sort,
-          start,
-          limit: pageSize,
-          populate: {
-            brand_logo: true,
-          },
-        }),
-        strapi.db.query(APP_TENANT_UID).count({
-          where: mergedFilters,
-        }),
-      ]);
+          populate,
+        },
+        model
+      );
 
       ctx.body = {
         results,
-        pagination: {
-          page,
-          pageSize,
-          pageCount: Math.ceil(total / pageSize),
-          total,
-        },
+        pagination,
       };
       return;
     }
 
     if (model === APP_TENANT_ADMIN_UID) {
+      const permissionQuery = await permissionChecker.sanitizedQuery.read(ctx.request.query);
+      const populate = await strapi
+        .plugin('content-manager')
+        .service('populate-builder')(model)
+        .populateDeep(1)
+        .countRelations({ toOne: false, toMany: true })
+        .build();
+
       const mergedFilters =
-        ctx.request.query?.filters && Object.keys(ctx.request.query.filters).length
+        permissionQuery.filters && Object.keys(permissionQuery.filters).length
           ? {
               $and: [
-                ctx.request.query.filters,
+                permissionQuery.filters,
                 { admin_user_id: { $eq: adminUser.id } },
                 { tenant: { id: { $in: tenantContext.tenantIds } } },
               ],
@@ -527,49 +538,20 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
               ],
             };
 
-      const page = Math.max(1, Number(ctx.request.query?.page) || 1);
-      const pageSize = Math.max(1, Math.min(100, Number(ctx.request.query?.pageSize) || 10));
-      const start = (page - 1) * pageSize;
-      const sort = ctx.request.query?.sort || ['id:asc'];
-      const [results, total] = await Promise.all([
-        strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+      const { results, pagination } = await entityManager.findPage(
+        {
+          ...permissionQuery,
           filters: mergedFilters,
-          fields: Object.keys(strapi.getModel(APP_TENANT_ADMIN_UID)?.attributes || {}),
-          sort,
-          start,
-          limit: pageSize,
-          populate: {
-            tenant: {
-              fields: ['id', 'name', 'slug'],
-            },
-          },
-        }),
-        strapi.db.query(APP_TENANT_ADMIN_UID).count({
-          where: mergedFilters,
-        }),
-      ]);
+          populate,
+        },
+        model
+      );
 
       ctx.body = {
         results,
-        pagination: {
-          page,
-          pageSize,
-          pageCount: Math.ceil(total / pageSize),
-          total,
-        },
+        pagination,
       };
       return;
-    }
-
-    const { userAbility } = ctx.state;
-    const entityManager = strapi.plugin('content-manager').service('entity-manager');
-    const permissionChecker = strapi
-      .plugin('content-manager')
-      .service('permission-checker')
-      .create({ userAbility, model });
-
-    if (permissionChecker.cannot.read()) {
-      return ctx.forbidden();
     }
 
     const permissionQuery = await permissionChecker.sanitizedQuery.read(ctx.request.query);
