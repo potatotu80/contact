@@ -757,8 +757,11 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
       'plugin::upload.file',
       'plugin::upload.folder',
     ]);
+    const hiddenActionPrefixes = ['plugin::upload.'];
     const visiblePermissions = userPermissions.filter(
-      (permission) => !hiddenSubjects.has(permission.subject)
+      (permission) =>
+        !hiddenSubjects.has(permission.subject) &&
+        !hiddenActionPrefixes.some((prefix) => String(permission.action || '').startsWith(prefix))
     );
 
     const expandedPermissions = visiblePermissions.map((permission) => {
