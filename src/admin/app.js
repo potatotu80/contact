@@ -2103,8 +2103,90 @@ const installSettingsUsersSortGuard = () => {
   window.addEventListener('popstate', syncSettingsUsersQuery);
 };
 
+const TENANT_ADMIN_CAPABILITIES_PATH = '/admin/tenant-admin/capabilities';
+const SETTINGS_PATH_PREFIX = '/admin/settings';
+const TENANT_ADMIN_DEFAULT_PATH = '/admin/content-manager/collectionType/api::app-user.app-user';
+
+const fetchTenantAdminCapabilities = async () => {
+  const response = await fetch(TENANT_ADMIN_CAPABILITIES_PATH, {
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load tenant admin capabilities (${response.status})`);
+  }
+
+  const payload = await response.json();
+  return payload?.data || {};
+};
+
+const hideSettingsNavigation = () => {
+  const navLinks = Array.from(document.querySelectorAll('a[href="/admin/settings"]'));
+  navLinks.forEach((link) => {
+    const navItem = link.closest('a, li, div');
+    if (navItem instanceof HTMLElement) {
+      navItem.style.display = 'none';
+    }
+    if (link instanceof HTMLElement) {
+      link.style.display = 'none';
+    }
+  });
+};
+
+const redirectTenantAdminAwayFromSettings = () => {
+  if (!window.location.pathname.startsWith(SETTINGS_PATH_PREFIX)) {
+    return;
+  }
+
+  window.history.replaceState(window.history.state, '', TENANT_ADMIN_DEFAULT_PATH);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+};
+
+const installTenantAdminSettingsGuard = () => {
+  if (typeof window === 'undefined' || window.__tenantAdminSettingsGuardInstalled) {
+    return;
+  }
+
+  window.__tenantAdminSettingsGuardInstalled = true;
+
+  let isTenantAdminScoped = false;
+
+  const applyGuard = () => {
+    if (!isTenantAdminScoped) {
+      return;
+    }
+
+    hideSettingsNavigation();
+    redirectTenantAdminAwayFromSettings();
+  };
+
+  const wrapHistoryMethod = (methodName) => {
+    const original = window.history[methodName];
+    window.history[methodName] = function wrappedHistoryMethod(...args) {
+      const result = original.apply(this, args);
+      window.setTimeout(applyGuard, 0);
+      return result;
+    };
+  };
+
+  wrapHistoryMethod('pushState');
+  wrapHistoryMethod('replaceState');
+  window.addEventListener('popstate', applyGuard);
+
+  void fetchTenantAdminCapabilities()
+    .then((capabilities) => {
+      isTenantAdminScoped = capabilities?.isTenantAdminScoped === true;
+      applyGuard();
+    })
+    .catch(() => {});
+};
+
 const bootstrap = (app) => {
   installSettingsUsersSortGuard();
+  installTenantAdminSettingsGuard();
 
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'voice-call-panel',
