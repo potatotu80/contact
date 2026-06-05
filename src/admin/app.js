@@ -1768,14 +1768,14 @@ const BulkClearActions = () => {
 
       try {
         setIsCapabilityLoading(true);
-        const response = await get('/admin/tenant-admin/capabilities');
+        const response = await get('/tenant-admin/capabilities');
         if (!isMounted) return;
 
         const payload = response?.data?.data || {};
         setCanRenderClearAction(payload?.canDeleteManagedRecords !== false);
       } catch (_error) {
         if (!isMounted) return;
-        setCanRenderClearAction(true);
+        setCanRenderClearAction(false);
       } finally {
         if (isMounted) {
           setIsCapabilityLoading(false);
@@ -2143,8 +2143,7 @@ const redirectTenantAdminAwayFromSettings = () => {
     return;
   }
 
-  window.history.replaceState(window.history.state, '', TENANT_ADMIN_DEFAULT_PATH);
-  window.dispatchEvent(new PopStateEvent('popstate'));
+  window.location.replace(TENANT_ADMIN_DEFAULT_PATH);
 };
 
 const installTenantAdminSettingsGuard = () => {
