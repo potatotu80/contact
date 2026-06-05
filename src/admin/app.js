@@ -2124,9 +2124,11 @@ const fetchTenantAdminCapabilities = async () => {
 };
 
 const hideSettingsNavigation = () => {
-  const navLinks = Array.from(document.querySelectorAll('a[href="/admin/settings"]'));
+  const navLinks = Array.from(
+    document.querySelectorAll('a[href="/admin/settings"], a[href^="/admin/settings/"]')
+  );
   navLinks.forEach((link) => {
-    const navItem = link.closest('a, li, div');
+    const navItem = link.closest('a, li, [role="treeitem"], [role="listitem"], div');
     if (navItem instanceof HTMLElement) {
       navItem.style.display = 'none';
     }
@@ -2153,6 +2155,7 @@ const installTenantAdminSettingsGuard = () => {
   window.__tenantAdminSettingsGuardInstalled = true;
 
   let isTenantAdminScoped = false;
+  let observer = null;
 
   const applyGuard = () => {
     if (!isTenantAdminScoped) {
@@ -2175,6 +2178,14 @@ const installTenantAdminSettingsGuard = () => {
   wrapHistoryMethod('pushState');
   wrapHistoryMethod('replaceState');
   window.addEventListener('popstate', applyGuard);
+
+  observer = new MutationObserver(() => {
+    applyGuard();
+  });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 
   void fetchTenantAdminCapabilities()
     .then((capabilities) => {
