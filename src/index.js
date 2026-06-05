@@ -758,14 +758,16 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
       'plugin::upload.folder',
     ]);
     const hiddenActionPrefixes = ['plugin::upload.'];
-    const deleteRestrictedSubjects = new Set([APP_USER_UID, CONTACT_UID, APP_TENANT_ADMIN_UID]);
+    const readOnlySubjects = new Set([APP_USER_UID, CONTACT_UID, APP_TENANT_ADMIN_UID]);
     const visiblePermissions = userPermissions.filter(
       (permission) =>
         !hiddenSubjects.has(permission.subject) &&
         !hiddenActionPrefixes.some((prefix) => String(permission.action || '').startsWith(prefix)) &&
         !(
-          deleteRestrictedSubjects.has(permission.subject) &&
-          String(permission.action || '').endsWith('.delete')
+          readOnlySubjects.has(permission.subject) &&
+          ['.create', '.update', '.delete'].some((suffix) =>
+            String(permission.action || '').endsWith(suffix)
+          )
         )
     );
 
@@ -1989,13 +1991,6 @@ module.exports = {
         return next();
       }
 
-      if (ctx.method === 'POST') {
-        if (!enforceTenantOnAdminBody(ctx, tenantContext, slug)) {
-          return ctx.forbidden('This admin user cannot create records outside assigned tenants.');
-        }
-        return next();
-      }
-
       if (entityId && (ctx.method === 'GET' || ctx.method === 'DELETE' || ctx.method === 'PUT')) {
         const scopedEntity = await assertScopedAdminRecord(strapi, tenantContext, slug, entityId);
 
@@ -2004,14 +1999,8 @@ module.exports = {
         }
       }
 
-      if (ctx.method === 'DELETE') {
-        return ctx.forbidden('Tenant admin users cannot delete records.');
-      }
-
-      if (ctx.method === 'PUT') {
-        if (!enforceTenantOnAdminBody(ctx, tenantContext, slug)) {
-          return ctx.forbidden('This admin user cannot update records outside assigned tenants.');
-        }
+      if (ctx.method !== 'GET') {
+        return ctx.forbidden('Tenant admin users have read-only access.');
       }
 
       return next();
