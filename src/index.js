@@ -758,10 +758,15 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
       'plugin::upload.folder',
     ]);
     const hiddenActionPrefixes = ['plugin::upload.'];
+    const deleteRestrictedSubjects = new Set([APP_USER_UID, CONTACT_UID, APP_TENANT_ADMIN_UID]);
     const visiblePermissions = userPermissions.filter(
       (permission) =>
         !hiddenSubjects.has(permission.subject) &&
-        !hiddenActionPrefixes.some((prefix) => String(permission.action || '').startsWith(prefix))
+        !hiddenActionPrefixes.some((prefix) => String(permission.action || '').startsWith(prefix)) &&
+        !(
+          deleteRestrictedSubjects.has(permission.subject) &&
+          String(permission.action || '').endsWith('.delete')
+        )
     );
 
     const expandedPermissions = visiblePermissions.map((permission) => {
@@ -1999,6 +2004,10 @@ module.exports = {
         }
       }
 
+      if (ctx.method === 'DELETE') {
+        return ctx.forbidden('Tenant admin users cannot delete records.');
+      }
+
       if (ctx.method === 'PUT') {
         if (!enforceTenantOnAdminBody(ctx, tenantContext, slug)) {
           return ctx.forbidden('This admin user cannot update records outside assigned tenants.');
@@ -2212,6 +2221,27 @@ module.exports = {
             },
             config: {
               auth: false,
+            },
+          },
+          {
+            method: 'GET',
+            path: '/tenant-admin/capabilities',
+            handler: async (ctx) => {
+              const adminUser = await getAdminRequestUser(ctx, strapi);
+              if (!adminUser?.id) {
+                return ctx.unauthorized('Admin authentication is required.');
+              }
+
+              const tenantContext = await getAdminTenantContext(strapi, adminUser);
+              ctx.body = {
+                data: {
+                  isTenantAdminScoped: !tenantContext.isSuperAdmin && tenantContext.tenantIds.length > 0,
+                  canDeleteManagedRecords: tenantContext.isSuperAdmin,
+                },
+              };
+            },
+            config: {
+              policies: ['admin::isAuthenticatedAdmin'],
             },
           },
           {

@@ -1731,6 +1731,8 @@ const TenantKeyPanel = () => {
 
 const BulkClearActions = () => {
   const [isClearing, setIsClearing] = useState(false);
+  const [canRenderClearAction, setCanRenderClearAction] = useState(false);
+  const [isCapabilityLoading, setIsCapabilityLoading] = useState(true);
   const { get, del } = useFetchClient();
   const toggleNotification = useNotification();
   const match = useRouteMatch('/content-manager/collectionType/:slug');
@@ -1752,7 +1754,44 @@ const BulkClearActions = () => {
       ? 'Clear ALL Contacts?'
       : '';
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCapabilities = async () => {
+      if (!isUserList && !isContactList) {
+        if (isMounted) {
+          setCanRenderClearAction(false);
+          setIsCapabilityLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setIsCapabilityLoading(true);
+        const response = await get('/admin/tenant-admin/capabilities');
+        if (!isMounted) return;
+
+        const payload = response?.data?.data || {};
+        setCanRenderClearAction(payload?.canDeleteManagedRecords !== false);
+      } catch (_error) {
+        if (!isMounted) return;
+        setCanRenderClearAction(true);
+      } finally {
+        if (isMounted) {
+          setIsCapabilityLoading(false);
+        }
+      }
+    };
+
+    void loadCapabilities();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [get, isContactList, isUserList]);
+
   if (!isUserList && !isContactList) return null;
+  if (isCapabilityLoading || !canRenderClearAction) return null;
 
   const clearAllEntries = async () => {
     if (isClearing) return;
