@@ -2105,6 +2105,7 @@ const installSettingsUsersSortGuard = () => {
 
 const TENANT_ADMIN_CAPABILITIES_PATH = '/admin/tenant-admin/capabilities';
 const SETTINGS_PATH_PREFIX = '/admin/settings';
+const PROFILE_PATH_PREFIX = '/admin/me';
 const TENANT_ADMIN_DEFAULT_PATH = '/admin/content-manager/collectionType/api::app-user.app-user';
 
 const fetchTenantAdminCapabilities = async () => {
@@ -2123,9 +2124,14 @@ const fetchTenantAdminCapabilities = async () => {
   return payload?.data || {};
 };
 
-const hideSettingsNavigation = () => {
+const hideTenantAdminNavigation = () => {
   const navLinks = Array.from(
-    document.querySelectorAll('a[href="/admin/settings"], a[href^="/admin/settings/"]')
+    document.querySelectorAll([
+      'a[href="/admin/settings"]',
+      'a[href^="/admin/settings/"]',
+      'a[href="/admin/me"]',
+      'a[href^="/admin/me?"]',
+    ].join(', '))
   );
   navLinks.forEach((link) => {
     const navItem = link.closest('a, li, [role="treeitem"], [role="listitem"], div');
@@ -2138,8 +2144,9 @@ const hideSettingsNavigation = () => {
   });
 };
 
-const redirectTenantAdminAwayFromSettings = () => {
-  if (!window.location.pathname.startsWith(SETTINGS_PATH_PREFIX)) {
+const redirectTenantAdminAwayFromRestrictedPages = () => {
+  const path = window.location.pathname;
+  if (!path.startsWith(SETTINGS_PATH_PREFIX) && !path.startsWith(PROFILE_PATH_PREFIX)) {
     return;
   }
 
@@ -2161,8 +2168,8 @@ const installTenantAdminSettingsGuard = () => {
       return;
     }
 
-    hideSettingsNavigation();
-    redirectTenantAdminAwayFromSettings();
+    hideTenantAdminNavigation();
+    redirectTenantAdminAwayFromRestrictedPages();
   };
 
   const wrapHistoryMethod = (methodName) => {
@@ -2248,3 +2255,7 @@ export default {
   config,
   bootstrap,
 };
+
+
+
+

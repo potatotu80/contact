@@ -737,6 +737,7 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
   }
 
   const originalGetOwnPermissions = controller.getOwnPermissions.bind(controller);
+  const originalUpdateMe = controller.updateMe?.bind(controller);
   const managedSubjects = [APP_USER_UID, CONTACT_UID, APP_TENANT_UID, APP_TENANT_ADMIN_UID];
   const fieldsBySubject = Object.fromEntries(
     managedSubjects.map((uid) => [uid, Object.keys(strapi.getModel(uid)?.attributes || {})])
@@ -825,6 +826,18 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
       data: expandedPermissions.map(sanitizePermission),
     };
   };
+
+  if (originalUpdateMe) {
+    controller.updateMe = async (ctx) => {
+      const adminUser = ctx.state?.user;
+      const tenantContext = await getAdminTenantContext(strapi, adminUser);
+      if (!tenantContext.isSuperAdmin && tenantContext.tenantIds.length) {
+        return ctx.forbidden('Tenant admin users have read-only access.');
+      }
+
+      return originalUpdateMe(ctx);
+    };
+  }
 
   controller.__tenantPermissionWrapped = true;
 };
@@ -2554,5 +2567,7 @@ module.exports = {
     await backfillContactTenantAdminNames(strapi);
   },
 };
+
+
 
 
