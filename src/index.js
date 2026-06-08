@@ -832,7 +832,7 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
       const adminUser = ctx.state?.user;
       const tenantContext = await getAdminTenantContext(strapi, adminUser);
       if (!tenantContext.isSuperAdmin && tenantContext.tenantIds.length) {
-        return ctx.forbidden('Tenant admin users have read-only access.');
+        return ctx.forbidden('Forbidden');
       }
 
       return originalUpdateMe(ctx);
@@ -2013,7 +2013,7 @@ module.exports = {
       }
 
       if (ctx.method !== 'GET') {
-        return ctx.forbidden('Tenant admin users have read-only access.');
+        return ctx.forbidden('Forbidden');
       }
 
       return next();
@@ -2567,6 +2567,7 @@ module.exports = {
     await backfillContactTenantAdminNames(strapi);
   },
 };
+
 
 
 
