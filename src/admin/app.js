@@ -2154,6 +2154,19 @@ const redirectTenantAdminAwayFromRestrictedPages = () => {
     return;
   }
 
+  if (path.startsWith(PROFILE_PATH_PREFIX)) {
+    const saveButtons = Array.from(document.querySelectorAll('button'));
+    saveButtons.forEach((button) => {
+      const text = String(button.textContent || '').trim().toLowerCase();
+      if (text === 'save') {
+        button.setAttribute('disabled', 'disabled');
+        button.setAttribute('aria-disabled', 'true');
+        button.style.pointerEvents = 'none';
+        button.style.opacity = '0.5';
+      }
+    });
+  }
+
   window.location.replace(TENANT_ADMIN_DEFAULT_PATH);
 };
 
@@ -2259,6 +2272,8 @@ export default {
   config,
   bootstrap,
 };
+
+
 
 
 
