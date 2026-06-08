@@ -2125,21 +2125,25 @@ const fetchTenantAdminCapabilities = async () => {
 };
 
 const hideTenantAdminNavigation = () => {
-  const navLinks = Array.from(
-    document.querySelectorAll([
-      'a[href="/admin/settings"]',
-      'a[href^="/admin/settings/"]',
-      'a[href="/admin/me"]',
-      'a[href^="/admin/me?"]',
-    ].join(', '))
-  );
-  navLinks.forEach((link) => {
-    const navItem = link.closest('a, li, [role="treeitem"], [role="listitem"], div');
+  const links = Array.from(document.querySelectorAll('a, button, [role="menuitem"]'));
+
+  links.forEach((node) => {
+    const rawHref = node instanceof HTMLAnchorElement ? node.getAttribute('href') || '' : '';
+    const text = String(node.textContent || '').trim().toLowerCase();
+    const href = rawHref.toLowerCase();
+    const isSettingsLink = href === '/admin/settings' || href.startsWith('/admin/settings/');
+    const isProfileLink = href === '/admin/me' || href.startsWith('/admin/me?') || text === 'profile';
+
+    if (!isSettingsLink && !isProfileLink) {
+      return;
+    }
+
+    const navItem = node.closest('a, button, li, [role="menuitem"], [role="treeitem"], [role="listitem"], div');
     if (navItem instanceof HTMLElement) {
       navItem.style.display = 'none';
     }
-    if (link instanceof HTMLElement) {
-      link.style.display = 'none';
+    if (node instanceof HTMLElement) {
+      node.style.display = 'none';
     }
   });
 };
@@ -2255,6 +2259,7 @@ export default {
   config,
   bootstrap,
 };
+
 
 
 
