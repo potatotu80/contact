@@ -414,6 +414,7 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
 
   const originalFind = controller.find.bind(controller);
   const originalFindOne = controller.findOne.bind(controller);
+  const originalBulkDelete = controller.bulkDelete.bind(controller);
   const getForcedTenantPopulate = (model) => {
     if (model === APP_TENANT_ADMIN_UID) {
       return {
@@ -668,6 +669,61 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
     }
 
     ctx.body = entity;
+  };
+
+  controller.bulkDelete = async (ctx) => {
+    const model = ctx.params?.model;
+    if (model !== APP_USER_UID) {
+      return originalBulkDelete(ctx);
+    }
+
+    const requestedIds = Array.isArray(ctx.request?.body?.ids)
+      ? [...new Set(ctx.request.body.ids.map((entry) => parsePositiveInt(entry)).filter(Boolean))]
+      : [];
+
+    if (!requestedIds.length) {
+      return originalBulkDelete(ctx);
+    }
+
+    const { userAbility } = ctx.state;
+    const permissionChecker = strapi
+      .plugin('content-manager')
+      .service('permission-checker')
+      .create({ userAbility, model });
+
+    if (permissionChecker.cannot.delete()) {
+      return ctx.forbidden();
+    }
+
+    const permissionQuery = await permissionChecker.sanitizedQuery.delete(ctx.request.query || {});
+    const deletableUsers = await strapi.entityService.findMany(APP_USER_UID, {
+      ...permissionQuery,
+      filters: {
+        $and: [{ id: { $in: requestedIds } }].concat(permissionQuery.filters || []),
+      },
+      fields: ['id'],
+      limit: requestedIds.length,
+    });
+
+    const deletableUserIds = deletableUsers
+      .map((entry) => parsePositiveInt(entry?.id))
+      .filter(Boolean);
+
+    const response = await originalBulkDelete(ctx);
+
+    if (deletableUserIds.length) {
+      await strapi.entityService.deleteMany(CONTACT_UID, {
+        filters: {
+          user: {
+            id: {
+              $in: deletableUserIds,
+            },
+          },
+        },
+      });
+    }
+
+    return response;
   };
 
   controller.__tenantScopedWrapped = true;
