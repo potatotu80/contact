@@ -768,17 +768,25 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       .filter(Boolean);
 
     if (deletableUserIds.length) {
+      strapi.log.info(
+        `[admin-bulk-delete] Preparing to delete users=${deletableUserIds.join(', ')} with related contacts and images.`
+      );
+
       for (const user of deletableUsers) {
         const userId = parsePositiveInt(user?.id);
         if (!userId) {
           continue;
         }
 
+        const tenantLabel = user?.tenant?.slug || user?.tenant?.name || `tenant-${user?.tenant?.id || 'unknown'}`;
+        strapi.log.info(
+          `[admin-bulk-delete] Cleaning storage for user=${userId} tenant=${tenantLabel}.`
+        );
         await deleteUserObjectStoragePrefix(user?.tenant, userId);
         await deleteUserLocalImages(user?.tenant, userId);
       }
 
-      await strapi.entityService.deleteMany(CONTACT_UID, {
+      const deletedContacts = await strapi.entityService.deleteMany(CONTACT_UID, {
         filters: {
           user: {
             id: {
@@ -787,9 +795,17 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
           },
         },
       });
+
+      strapi.log.info(
+        `[admin-bulk-delete] Deleted related contacts count=${deletedContacts?.count || 0} for users=${deletableUserIds.join(', ')}.`
+      );
     }
 
-    return originalBulkDelete(ctx);
+    const response = await originalBulkDelete(ctx);
+    strapi.log.info(
+      `[admin-bulk-delete] Deleted users count=${response?.body?.count || response?.count || 0} requested=${requestedIds.join(', ')} permitted=${deletableUserIds.join(', ')}.`
+    );
+    return response;
   };
 
   controller.__tenantScopedWrapped = true;
