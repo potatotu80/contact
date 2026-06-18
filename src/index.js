@@ -709,8 +709,6 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       .map((entry) => parsePositiveInt(entry?.id))
       .filter(Boolean);
 
-    const response = await originalBulkDelete(ctx);
-
     if (deletableUserIds.length) {
       await strapi.entityService.deleteMany(CONTACT_UID, {
         filters: {
@@ -723,7 +721,7 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       });
     }
 
-    return response;
+    return originalBulkDelete(ctx);
   };
 
   controller.__tenantScopedWrapped = true;
