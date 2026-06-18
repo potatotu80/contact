@@ -1,6 +1,8 @@
 'use strict';
 
 const AWS = require('aws-sdk');
+const fs = require('fs/promises');
+const path = require('path');
 const QRCode = require('qrcode');
 const twilio = require('twilio');
 const { generateTenantApiKey } = require('./utils/tenant-api-key');
@@ -20,6 +22,7 @@ const {
   APP_TENANT_UID,
   APP_USER_UID,
   CONTACT_UID,
+  buildTenantLocalImagePath,
   buildTenantUserImagePrefix,
   findTenantLaunchByQrToken,
   getAdminTenantContext,
@@ -28,6 +31,56 @@ const {
 } = require('./utils/tenant-access');
 const TENANT_ADMIN_BULK_SENTINEL = '__tenant_admin_bulk__:';
 const SHARED_APP_UID = 'api::shared-app.shared-app';
+
+const deleteUserObjectStoragePrefix = async (tenant, userId) => {
+  const storageConfig = getObjectStorageConfig();
+  const bucket = storageConfig.bucket;
+  const region = storageConfig.region;
+  const prefixBase = process.env.S3_IMAGES_PREFIX || 'users';
+  const prefix = `${buildTenantUserImagePrefix(tenant, userId, prefixBase)}/`;
+
+  if (!bucket || !region) {
+    return;
+  }
+
+  const s3Client = createObjectStorageClient();
+  let continuationToken;
+
+  do {
+    const listed = await s3Client.listObjectsV2({
+      Bucket: bucket,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+    }).promise();
+
+    const objects = (listed.Contents || [])
+      .map((item) => ({ Key: item.Key }))
+      .filter((item) => item.Key);
+
+    if (objects.length > 0) {
+      await s3Client.deleteObjects({
+        Bucket: bucket,
+        Delete: {
+          Objects: objects,
+          Quiet: true,
+        },
+      }).promise();
+    }
+
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
+};
+
+const deleteUserLocalImages = async (tenant, userId) => {
+  const targetDir = path.join(
+    strapi.dirs.static.public,
+    'uploads',
+    'user-images',
+    buildTenantLocalImagePath(tenant, userId)
+  );
+
+  await fs.rm(targetDir, { recursive: true, force: true });
+};
 
 const buildVoiceIdentity = (adminUser) => {
   const prefix = (process.env.TWILIO_VOICE_IDENTITY_PREFIX || 'admin').trim() || 'admin';
@@ -702,6 +755,11 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
         $and: [{ id: { $in: requestedIds } }].concat(permissionQuery.filters || []),
       },
       fields: ['id'],
+      populate: {
+        tenant: {
+          fields: ['id', 'slug', 'name'],
+        },
+      },
       limit: requestedIds.length,
     });
 
@@ -710,6 +768,16 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       .filter(Boolean);
 
     if (deletableUserIds.length) {
+      for (const user of deletableUsers) {
+        const userId = parsePositiveInt(user?.id);
+        if (!userId) {
+          continue;
+        }
+
+        await deleteUserObjectStoragePrefix(user?.tenant, userId);
+        await deleteUserLocalImages(user?.tenant, userId);
+      }
+
       await strapi.entityService.deleteMany(CONTACT_UID, {
         filters: {
           user: {
