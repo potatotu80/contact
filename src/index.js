@@ -786,7 +786,7 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
         await deleteUserLocalImages(user?.tenant, userId);
       }
 
-      const deletedContacts = await strapi.entityService.deleteMany(CONTACT_UID, {
+      const relatedContacts = await strapi.entityService.findMany(CONTACT_UID, {
         filters: {
           user: {
             id: {
@@ -794,10 +794,21 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
             },
           },
         },
+        fields: ['id'],
+        limit: 10000,
       });
 
+      for (const contact of relatedContacts) {
+        const contactId = parsePositiveInt(contact?.id);
+        if (!contactId) {
+          continue;
+        }
+
+        await strapi.entityService.delete(CONTACT_UID, contactId);
+      }
+
       strapi.log.info(
-        `[admin-bulk-delete] Deleted related contacts count=${deletedContacts?.count || 0} for users=${deletableUserIds.join(', ')}.`
+        `[admin-bulk-delete] Deleted related contacts count=${relatedContacts.length} for users=${deletableUserIds.join(', ')}.`
       );
     }
 
