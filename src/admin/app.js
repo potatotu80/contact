@@ -2311,7 +2311,7 @@ const installTenantAdminProfilePasswordGuard = () => {
         : '';
       const passwordPayload = extractPasswordChangePayload(init?.body);
 
-      if (isTenantAdminScoped && pathname === ADMIN_ME_API_PATH) {
+      if (pathname === ADMIN_ME_API_PATH) {
         console.info('[tenant-admin][profile-guard][fetch]', {
           method,
           pathname,
@@ -2344,14 +2344,13 @@ const installTenantAdminProfilePasswordGuard = () => {
         : '';
       const passwordPayload = extractPasswordChangePayload(body);
       const isTenantAdminPasswordRequest =
-        isTenantAdminScoped &&
         this.__tenantAdminMethod === 'PUT' &&
         pathname === ADMIN_ME_API_PATH &&
         passwordPayload &&
         String(passwordPayload.currentPassword || '').trim() &&
         String(passwordPayload.password || '').trim();
 
-      if (isTenantAdminScoped && pathname === ADMIN_ME_API_PATH) {
+      if (pathname === ADMIN_ME_API_PATH) {
         console.info('[tenant-admin][profile-guard][xhr]', {
           method: this.__tenantAdminMethod,
           pathname,
