@@ -1003,15 +1003,16 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
                 Object.prototype.hasOwnProperty.call(candidate, key)
               );
             }) || body;
-          const hasPasswordChange = ['currentPassword', 'password', 'confirmPassword'].every(
-            (key) => String(passwordBody[key] || '').trim()
-          );
+          const hasCurrentPassword = Boolean(String(passwordBody.currentPassword || '').trim());
+          const hasPassword = Boolean(String(passwordBody.password || '').trim());
+          const hasConfirmPassword = Boolean(String(passwordBody.confirmPassword || '').trim());
+          const hasPasswordChange = hasCurrentPassword && hasPassword;
 
           strapi.log.info(
             `[tenant-admin][updateMe] user=${adminUser?.id || 'unknown'} topKeys=${Object.keys(body).join(',') || '-'} userKeys=${Object.keys(bodyUser || {}).join(',') || '-'} dataKeys=${Object.keys(bodyData || {}).join(',') || '-'} passwordFields=${JSON.stringify({
               currentPassword: Boolean(String(passwordBody.currentPassword || '').trim()),
               password: Boolean(String(passwordBody.password || '').trim()),
-              confirmPassword: Boolean(String(passwordBody.confirmPassword || '').trim()),
+              confirmPassword: hasConfirmPassword,
             })}`
           );
 
@@ -1027,8 +1028,11 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
           ctx.request.body = {
             currentPassword: passwordBody.currentPassword,
             password: passwordBody.password,
-            confirmPassword: passwordBody.confirmPassword,
           };
+
+          if (hasConfirmPassword) {
+            ctx.request.body.confirmPassword = passwordBody.confirmPassword;
+          }
         }
 
         return originalUpdateMe(ctx);
