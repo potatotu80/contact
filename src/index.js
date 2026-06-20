@@ -427,6 +427,28 @@ const assertScopedAdminRecord = async (strapi, tenantContext, model, entityId) =
     return contacts[0] || null;
   }
 
+  if (model === APP_TENANT_ADMIN_UID) {
+    return findScopedTenantAdminRecord({
+      strapi,
+      adminUserId: tenantContext.adminUserId,
+      tenantIds: tenantContext.tenantIds,
+      entityId: parsedEntityId,
+    });
+  }
+
+  if (model === APP_TENANT_UID) {
+    if (!tenantContext.tenantIds.includes(parsedEntityId)) {
+      return null;
+    }
+
+    return strapi.entityService.findOne(APP_TENANT_UID, parsedEntityId, {
+      fields: ['id', 'name', 'slug', 'android_application_id', 'deep_link_scheme', 'apk_url'],
+      populate: {
+        brand_logo: true,
+      },
+    });
+  }
+
   return null;
 };
 
