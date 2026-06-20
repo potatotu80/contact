@@ -2491,16 +2491,22 @@ module.exports = {
               let tenantAdminRecordId = null;
 
               if (!tenantContext.isSuperAdmin && tenantContext.tenantIds.length) {
+                const ownershipFilter = buildTenantAdminOwnershipFilter({
+                  adminUserId: adminUser.id,
+                  adminEmail: adminUser.email,
+                });
                 const candidateRecords = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
                   filters: {
-                    admin_user_id: {
-                      $eq: adminUser.id,
-                    },
-                    tenant: {
-                      id: {
-                        $in: tenantContext.tenantIds,
+                    $and: [
+                      ownershipFilter || {},
+                      {
+                        tenant: {
+                          id: {
+                            $in: tenantContext.tenantIds,
+                          },
+                        },
                       },
-                    },
+                    ],
                   },
                   fields: ['id'],
                   sort: ['id:desc'],
@@ -2522,6 +2528,12 @@ module.exports = {
                   }
                 }
               }
+
+              strapi.log.info(
+                `[tenant-admin][capabilities] adminUser=${adminUser.id} isSuperAdmin=${tenantContext.isSuperAdmin} tenantIds=${JSON.stringify(
+                  tenantContext.tenantIds
+                )} tenantAdminRecordId=${tenantAdminRecordId || 'null'}`
+              );
 
               ctx.body = {
                 data: {
