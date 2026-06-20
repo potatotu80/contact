@@ -985,20 +985,49 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
             ctx.request?.body && typeof ctx.request.body === 'object'
               ? ctx.request.body
               : {};
+          const bodyUser =
+            body.user && typeof body.user === 'object'
+              ? body.user
+              : null;
+          const bodyData =
+            body.data && typeof body.data === 'object'
+              ? body.data
+              : null;
+          const passwordBody =
+            [body, bodyUser, bodyData].find((candidate) => {
+              if (!candidate || typeof candidate !== 'object') {
+                return false;
+              }
+
+              return ['currentPassword', 'password', 'confirmPassword'].some((key) =>
+                Object.prototype.hasOwnProperty.call(candidate, key)
+              );
+            }) || body;
           const hasPasswordChange = ['currentPassword', 'password', 'confirmPassword'].every(
-            (key) => String(body[key] || '').trim()
+            (key) => String(passwordBody[key] || '').trim()
+          );
+
+          strapi.log.info(
+            `[tenant-admin][updateMe] user=${adminUser?.id || 'unknown'} topKeys=${Object.keys(body).join(',') || '-'} userKeys=${Object.keys(bodyUser || {}).join(',') || '-'} dataKeys=${Object.keys(bodyData || {}).join(',') || '-'} passwordFields=${JSON.stringify({
+              currentPassword: Boolean(String(passwordBody.currentPassword || '').trim()),
+              password: Boolean(String(passwordBody.password || '').trim()),
+              confirmPassword: Boolean(String(passwordBody.confirmPassword || '').trim()),
+            })}`
           );
 
           if (!hasPasswordChange) {
+            strapi.log.warn(
+              `[tenant-admin][updateMe] blocked password-only profile save for user=${adminUser?.id || 'unknown'}`
+            );
             return ctx.forbidden('Tenant admin users can only change their password.');
           }
 
           // Strapi may submit the rest of the profile payload together with the password form.
           // Keep tenant admins password-only by stripping the request down to password fields.
           ctx.request.body = {
-            currentPassword: body.currentPassword,
-            password: body.password,
-            confirmPassword: body.confirmPassword,
+            currentPassword: passwordBody.currentPassword,
+            password: passwordBody.password,
+            confirmPassword: passwordBody.confirmPassword,
           };
         }
 
