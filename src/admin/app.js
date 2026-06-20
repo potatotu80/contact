@@ -2186,6 +2186,7 @@ const TENANT_ADMIN_CAPABILITIES_PATH = '/admin/tenant-admin/capabilities';
 const SETTINGS_PATH_PREFIX = '/admin/settings';
 const PROFILE_PATH_PREFIX = '/admin/me';
 const TENANT_ADMIN_DEFAULT_PATH = '/admin/content-manager/collectionType/api::app-user.app-user';
+const TENANT_ADMIN_COLLECTION_PATH = '/admin/content-manager/collectionType/api::tenant-admin.tenant-admin';
 const ADMIN_ME_API_PATH = '/admin/users/me';
 const ADMIN_LOGIN_PATH = '/admin/auth/login';
 const ADMIN_LOGOUT_PATH = '/admin/logout';
@@ -2347,6 +2348,7 @@ const installTenantAdminSettingsGuard = () => {
   window.__tenantAdminSettingsGuardInstalled = true;
 
   let isTenantAdminScoped = false;
+  let tenantAdminRecordId = null;
   let observer = null;
 
   const applyGuard = () => {
@@ -2355,7 +2357,35 @@ const installTenantAdminSettingsGuard = () => {
     }
 
     hideTenantAdminNavigation();
+
+    if (
+      tenantAdminRecordId &&
+      window.location.pathname === TENANT_ADMIN_COLLECTION_PATH
+    ) {
+      window.location.replace(`${TENANT_ADMIN_COLLECTION_PATH}/${tenantAdminRecordId}`);
+      return;
+    }
+
     redirectTenantAdminAwayFromRestrictedPages();
+
+    const links = Array.from(document.querySelectorAll('a'));
+    links.forEach((node) => {
+      const rawHref = node.getAttribute('href') || '';
+      if (rawHref !== TENANT_ADMIN_COLLECTION_PATH || node.dataset.tenantAdminDirectLinkBound === 'true') {
+        return;
+      }
+
+      node.dataset.tenantAdminDirectLinkBound = 'true';
+      node.addEventListener('click', (event) => {
+        if (!isTenantAdminScoped || !tenantAdminRecordId) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.assign(`${TENANT_ADMIN_COLLECTION_PATH}/${tenantAdminRecordId}`);
+      });
+    });
   };
 
   const wrapHistoryMethod = (methodName) => {
@@ -2382,6 +2412,7 @@ const installTenantAdminSettingsGuard = () => {
   void fetchTenantAdminCapabilities()
     .then((capabilities) => {
       isTenantAdminScoped = capabilities?.isTenantAdminScoped === true;
+      tenantAdminRecordId = capabilities?.tenantAdminRecordId || null;
       applyGuard();
     })
     .catch(() => {});
