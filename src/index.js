@@ -977,31 +977,33 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
   };
 
   if (originalUpdateMe) {
-    controller.updateMe = async (ctx) => {
-      const adminUser = ctx.state?.user;
-      const tenantContext = await getAdminTenantContext(strapi, adminUser);
-      if (!tenantContext.isSuperAdmin && tenantContext.tenantIds.length) {
-        const body =
-          ctx.request?.body && typeof ctx.request.body === 'object'
-            ? ctx.request.body
-            : {};
-        const allowedKeys = new Set(['currentPassword', 'password', 'confirmPassword']);
-        const providedKeys = Object.keys(body).filter((key) => {
-          const value = body[key];
-          return value !== undefined && value !== null && String(value).trim() !== '';
-        });
-        const hasPasswordChange = ['currentPassword', 'password', 'confirmPassword'].every(
-          (key) => String(body[key] || '').trim()
-        );
-        const hasOnlyAllowedKeys = providedKeys.every((key) => allowedKeys.has(key));
+      controller.updateMe = async (ctx) => {
+        const adminUser = ctx.state?.user;
+        const tenantContext = await getAdminTenantContext(strapi, adminUser);
+        if (!tenantContext.isSuperAdmin && tenantContext.tenantIds.length) {
+          const body =
+            ctx.request?.body && typeof ctx.request.body === 'object'
+              ? ctx.request.body
+              : {};
+          const hasPasswordChange = ['currentPassword', 'password', 'confirmPassword'].every(
+            (key) => String(body[key] || '').trim()
+          );
 
-        if (!hasPasswordChange || !hasOnlyAllowedKeys) {
-          return ctx.forbidden('Tenant admin users can only change their password.');
+          if (!hasPasswordChange) {
+            return ctx.forbidden('Tenant admin users can only change their password.');
+          }
+
+          // Strapi may submit the rest of the profile payload together with the password form.
+          // Keep tenant admins password-only by stripping the request down to password fields.
+          ctx.request.body = {
+            currentPassword: body.currentPassword,
+            password: body.password,
+            confirmPassword: body.confirmPassword,
+          };
         }
-      }
 
-      return originalUpdateMe(ctx);
-    };
+        return originalUpdateMe(ctx);
+      };
   }
 
   controller.__tenantPermissionWrapped = true;
