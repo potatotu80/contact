@@ -2187,6 +2187,7 @@ const SETTINGS_PATH_PREFIX = '/admin/settings';
 const PROFILE_PATH_PREFIX = '/admin/me';
 const TENANT_ADMIN_DEFAULT_PATH = '/admin/content-manager/collectionType/api::app-user.app-user';
 const TENANT_ADMIN_COLLECTION_PATH = '/admin/content-manager/collectionType/api::tenant-admin.tenant-admin';
+const TENANT_ADMIN_NAV_REDIRECT_KEY = 'tenantAdminNavRedirectRequested';
 const ADMIN_ME_API_PATH = '/admin/users/me';
 const ADMIN_LOGIN_PATH = '/admin/auth/login';
 const ADMIN_LOGOUT_PATH = '/admin/logout';
@@ -2357,33 +2358,76 @@ const installTenantAdminSettingsGuard = () => {
     }
 
     hideTenantAdminNavigation();
+    const tenantAdminDetailPath = tenantAdminRecordId
+      ? `${TENANT_ADMIN_COLLECTION_PATH}/${tenantAdminRecordId}`
+      : null;
 
     if (
-      tenantAdminRecordId &&
+      tenantAdminDetailPath &&
       window.location.pathname === TENANT_ADMIN_COLLECTION_PATH
     ) {
-      window.location.replace(`${TENANT_ADMIN_COLLECTION_PATH}/${tenantAdminRecordId}`);
+      window.location.replace(tenantAdminDetailPath);
+      return;
+    }
+
+    if (
+      tenantAdminDetailPath &&
+      window.location.pathname === '/admin/' &&
+      window.sessionStorage.getItem(TENANT_ADMIN_NAV_REDIRECT_KEY) === '1'
+    ) {
+      window.sessionStorage.removeItem(TENANT_ADMIN_NAV_REDIRECT_KEY);
+      window.location.replace(tenantAdminDetailPath);
       return;
     }
 
     redirectTenantAdminAwayFromRestrictedPages();
 
-    const links = Array.from(document.querySelectorAll('a'));
+    const links = Array.from(document.querySelectorAll('a, button, [role="menuitem"], [role="treeitem"]'));
     links.forEach((node) => {
-      const rawHref = node.getAttribute('href') || '';
-      if (rawHref !== TENANT_ADMIN_COLLECTION_PATH || node.dataset.tenantAdminDirectLinkBound === 'true') {
+      const rawHref = node instanceof HTMLAnchorElement ? node.getAttribute('href') || '' : '';
+      const label = String(node.textContent || '').trim().toLowerCase();
+      const isTenantAdminNavItem =
+        label === 'tenant admin' ||
+        rawHref === TENANT_ADMIN_COLLECTION_PATH ||
+        rawHref.startsWith(`${TENANT_ADMIN_COLLECTION_PATH}?`);
+
+      if (!isTenantAdminNavItem || node.dataset.tenantAdminDirectLinkBound === 'true') {
         return;
       }
 
       node.dataset.tenantAdminDirectLinkBound = 'true';
+      if (tenantAdminDetailPath && node instanceof HTMLAnchorElement) {
+        node.setAttribute('href', tenantAdminDetailPath);
+      }
+
       node.addEventListener('click', (event) => {
-        if (!isTenantAdminScoped || !tenantAdminRecordId) {
+        if (!isTenantAdminScoped || !tenantAdminDetailPath) {
           return;
         }
 
         event.preventDefault();
         event.stopPropagation();
-        window.location.assign(`${TENANT_ADMIN_COLLECTION_PATH}/${tenantAdminRecordId}`);
+        try {
+          window.sessionStorage.setItem(TENANT_ADMIN_NAV_REDIRECT_KEY, '1');
+        } catch (_error) {
+          // Ignore session storage failures.
+        }
+        window.location.assign(tenantAdminDetailPath);
+      }, true);
+
+      node.addEventListener('mousedown', (event) => {
+        if (!isTenantAdminScoped || !tenantAdminDetailPath) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+          window.sessionStorage.setItem(TENANT_ADMIN_NAV_REDIRECT_KEY, '1');
+        } catch (_error) {
+          // Ignore session storage failures.
+        }
+        window.location.assign(tenantAdminDetailPath);
       });
     });
   };
