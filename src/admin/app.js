@@ -2372,10 +2372,13 @@ const installTenantAdminSettingsGuard = () => {
 
     if (
       tenantAdminDetailPath &&
-      window.location.pathname === '/admin/' &&
-      window.sessionStorage.getItem(TENANT_ADMIN_NAV_REDIRECT_KEY) === '1'
+      window.location.pathname === '/admin/'
     ) {
-      window.sessionStorage.removeItem(TENANT_ADMIN_NAV_REDIRECT_KEY);
+      try {
+        window.sessionStorage.removeItem(TENANT_ADMIN_NAV_REDIRECT_KEY);
+      } catch (_error) {
+        // Ignore session storage failures.
+      }
       window.location.replace(tenantAdminDetailPath);
       return;
     }
