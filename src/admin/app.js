@@ -2107,6 +2107,9 @@ const TENANT_ADMIN_CAPABILITIES_PATH = '/admin/tenant-admin/capabilities';
 const SETTINGS_PATH_PREFIX = '/admin/settings';
 const PROFILE_PATH_PREFIX = '/admin/me';
 const TENANT_ADMIN_DEFAULT_PATH = '/admin/content-manager/collectionType/api::app-user.app-user';
+const ADMIN_ME_API_PATH = '/admin/users/me';
+const ADMIN_LOGIN_PATH = '/admin/auth/login';
+const ADMIN_LOGOUT_PATH = '/admin/logout';
 
 const fetchTenantAdminCapabilities = async () => {
   const response = await fetch(TENANT_ADMIN_CAPABILITIES_PATH, {
@@ -2122,6 +2125,55 @@ const fetchTenantAdminCapabilities = async () => {
 
   const payload = await response.json();
   return payload?.data || {};
+};
+
+const extractPasswordChangePayload = (body) => {
+  if (!body) return null;
+
+  let parsedBody = body;
+  if (typeof body === 'string') {
+    try {
+      parsedBody = JSON.parse(body);
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  if (!parsedBody || typeof parsedBody !== 'object') {
+    return null;
+  }
+
+  const candidates = [parsedBody, parsedBody.user, parsedBody.data].filter(
+    (candidate) => candidate && typeof candidate === 'object'
+  );
+
+  return (
+    candidates.find((candidate) =>
+      ['currentPassword', 'password', 'confirmPassword'].some((key) =>
+        Object.prototype.hasOwnProperty.call(candidate, key)
+      )
+    ) || null
+  );
+};
+
+const extractTenantAdminPasswordErrorMessage = (payload) => {
+  const error = payload?.error || {};
+  const currentPasswordErrors = error?.details?.currentPassword;
+  if (Array.isArray(currentPasswordErrors) && currentPasswordErrors.length) {
+    const firstMessage = String(currentPasswordErrors[0] || '').trim();
+    if (firstMessage) {
+      return firstMessage === 'Invalid credentials'
+        ? 'Current password is incorrect.'
+        : firstMessage;
+    }
+  }
+
+  const directMessage = String(error?.message || '').trim();
+  if (directMessage && directMessage !== 'ValidationError') {
+    return directMessage;
+  }
+
+  return 'Unable to change password. Please check your current password and try again.';
 };
 
 const hideTenantAdminNavigation = () => {
@@ -2204,9 +2256,82 @@ const installTenantAdminSettingsGuard = () => {
     .catch(() => {});
 };
 
+const installTenantAdminProfilePasswordGuard = () => {
+  if (typeof window === 'undefined' || window.__tenantAdminProfilePasswordGuardInstalled) {
+    return;
+  }
+
+  window.__tenantAdminProfilePasswordGuardInstalled = true;
+
+  let isTenantAdminScoped = false;
+  const originalFetch = window.fetch.bind(window);
+
+  window.fetch = async (...args) => {
+    const [input, init] = args;
+    const requestUrl = typeof input === 'string' ? input : input?.url || '';
+    const method =
+      String(
+        init?.method ||
+        (typeof input === 'object' && input ? input.method : '') ||
+        'GET'
+      ).toUpperCase();
+    const pathname = requestUrl
+      ? new URL(requestUrl, window.location.origin).pathname
+      : '';
+    const passwordPayload = extractPasswordChangePayload(init?.body);
+    const isTenantAdminPasswordRequest =
+      isTenantAdminScoped &&
+      method === 'PUT' &&
+      pathname === ADMIN_ME_API_PATH &&
+      passwordPayload &&
+      String(passwordPayload.currentPassword || '').trim() &&
+      String(passwordPayload.password || '').trim();
+
+    const response = await originalFetch(...args);
+
+    if (!isTenantAdminPasswordRequest) {
+      return response;
+    }
+
+    if (response.ok) {
+      window.setTimeout(() => {
+        window.alert('Password changed successfully. Please log in again.');
+        window.location.assign(ADMIN_LOGOUT_PATH);
+        window.setTimeout(() => {
+          if (window.location.pathname !== ADMIN_LOGIN_PATH) {
+            window.location.assign(ADMIN_LOGIN_PATH);
+          }
+        }, 800);
+      }, 0);
+      return response;
+    }
+
+    try {
+      const payload = await response.clone().json();
+      const message = extractTenantAdminPasswordErrorMessage(payload);
+      window.setTimeout(() => {
+        window.alert(message);
+      }, 0);
+    } catch (_error) {
+      window.setTimeout(() => {
+        window.alert('Unable to change password. Please try again.');
+      }, 0);
+    }
+
+    return response;
+  };
+
+  void fetchTenantAdminCapabilities()
+    .then((capabilities) => {
+      isTenantAdminScoped = capabilities?.isTenantAdminScoped === true;
+    })
+    .catch(() => {});
+};
+
 const bootstrap = (app) => {
   installSettingsUsersSortGuard();
   installTenantAdminSettingsGuard();
+  installTenantAdminProfilePasswordGuard();
 
   app.injectContentManagerComponent('editView', 'right-links', {
     name: 'voice-call-panel',
