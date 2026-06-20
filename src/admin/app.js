@@ -2276,6 +2276,40 @@ const installTenantAdminProfilePasswordGuard = () => {
   let isTenantAdminScoped = false;
   const originalXhrOpen = window.XMLHttpRequest?.prototype?.open;
   const originalXhrSend = window.XMLHttpRequest?.prototype?.send;
+  const originalFetch = window.fetch ? window.fetch.bind(window) : null;
+
+  if (originalFetch) {
+    window.fetch = async (...args) => {
+      const [input, init] = args;
+      const requestUrl = typeof input === 'string' ? input : input?.url || '';
+      const method = String(
+        init?.method ||
+        (typeof input === 'object' && input ? input.method : '') ||
+        'GET'
+      ).toUpperCase();
+      const pathname = requestUrl
+        ? new URL(requestUrl, window.location.origin).pathname
+        : '';
+      const passwordPayload = extractPasswordChangePayload(init?.body);
+
+      if (isTenantAdminScoped && pathname === ADMIN_ME_API_PATH) {
+        console.info('[tenant-admin][profile-guard][fetch]', {
+          method,
+          pathname,
+          bodyKeys:
+            init?.body && typeof init.body === 'string'
+              ? Object.keys(JSON.parse(init.body || '{}'))
+              : Object.keys(init?.body || {}),
+          hasPasswordPayload: Boolean(passwordPayload),
+          hasCurrentPassword: Boolean(String(passwordPayload?.currentPassword || '').trim()),
+          hasPassword: Boolean(String(passwordPayload?.password || '').trim()),
+          hasConfirmPassword: Boolean(String(passwordPayload?.confirmPassword || '').trim()),
+        });
+      }
+
+      return originalFetch(...args);
+    };
+  }
 
   if (originalXhrOpen && originalXhrSend) {
     window.XMLHttpRequest.prototype.open = function patchedOpen(method, url, ...rest) {
@@ -2298,8 +2332,27 @@ const installTenantAdminProfilePasswordGuard = () => {
         String(passwordPayload.currentPassword || '').trim() &&
         String(passwordPayload.password || '').trim();
 
+      if (isTenantAdminScoped && pathname === ADMIN_ME_API_PATH) {
+        console.info('[tenant-admin][profile-guard][xhr]', {
+          method: this.__tenantAdminMethod,
+          pathname,
+          rawBodyType: typeof body,
+          rawBodyPreview: typeof body === 'string' ? body.slice(0, 300) : null,
+          hasPasswordPayload: Boolean(passwordPayload),
+          hasCurrentPassword: Boolean(String(passwordPayload?.currentPassword || '').trim()),
+          hasPassword: Boolean(String(passwordPayload?.password || '').trim()),
+          hasConfirmPassword: Boolean(String(passwordPayload?.confirmPassword || '').trim()),
+          isTenantAdminPasswordRequest,
+        });
+      }
+
       if (isTenantAdminPasswordRequest) {
         this.addEventListener('loadend', () => {
+          console.info('[tenant-admin][profile-guard][xhr-response]', {
+            status: this.status,
+            responseText: String(this.responseText || '').slice(0, 500),
+          });
+
           if (this.status >= 200 && this.status < 300) {
             window.setTimeout(() => {
               window.alert('Password changed successfully. Please log in again.');
