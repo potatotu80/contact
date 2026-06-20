@@ -981,7 +981,23 @@ const attachTenantAdminPermissionExpansion = (strapi) => {
       const adminUser = ctx.state?.user;
       const tenantContext = await getAdminTenantContext(strapi, adminUser);
       if (!tenantContext.isSuperAdmin && tenantContext.tenantIds.length) {
-        return ctx.forbidden('Forbidden');
+        const body =
+          ctx.request?.body && typeof ctx.request.body === 'object'
+            ? ctx.request.body
+            : {};
+        const allowedKeys = new Set(['currentPassword', 'password', 'confirmPassword']);
+        const providedKeys = Object.keys(body).filter((key) => {
+          const value = body[key];
+          return value !== undefined && value !== null && String(value).trim() !== '';
+        });
+        const hasPasswordChange = ['currentPassword', 'password', 'confirmPassword'].every(
+          (key) => String(body[key] || '').trim()
+        );
+        const hasOnlyAllowedKeys = providedKeys.every((key) => allowedKeys.has(key));
+
+        if (!hasPasswordChange || !hasOnlyAllowedKeys) {
+          return ctx.forbidden('Tenant admin users can only change their password.');
+        }
       }
 
       return originalUpdateMe(ctx);

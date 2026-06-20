@@ -2132,9 +2132,8 @@ const hideTenantAdminNavigation = () => {
     const text = String(node.textContent || '').trim().toLowerCase();
     const href = rawHref.toLowerCase();
     const isSettingsLink = href === '/admin/settings' || href.startsWith('/admin/settings/');
-    const isProfileLink = href === '/admin/me' || href.startsWith('/admin/me?') || text === 'profile';
 
-    if (!isSettingsLink && !isProfileLink) {
+    if (!isSettingsLink) {
       return;
     }
 
@@ -2150,21 +2149,8 @@ const hideTenantAdminNavigation = () => {
 
 const redirectTenantAdminAwayFromRestrictedPages = () => {
   const path = window.location.pathname;
-  if (!path.startsWith(SETTINGS_PATH_PREFIX) && !path.startsWith(PROFILE_PATH_PREFIX)) {
+  if (!path.startsWith(SETTINGS_PATH_PREFIX)) {
     return;
-  }
-
-  if (path.startsWith(PROFILE_PATH_PREFIX)) {
-    const saveButtons = Array.from(document.querySelectorAll('button'));
-    saveButtons.forEach((button) => {
-      const text = String(button.textContent || '').trim().toLowerCase();
-      if (text === 'save') {
-        button.setAttribute('disabled', 'disabled');
-        button.setAttribute('aria-disabled', 'true');
-        button.style.pointerEvents = 'none';
-        button.style.opacity = '0.5';
-      }
-    });
   }
 
   window.location.replace(TENANT_ADMIN_DEFAULT_PATH);
