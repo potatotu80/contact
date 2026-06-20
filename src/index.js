@@ -2600,6 +2600,10 @@ module.exports = {
             const tenantContext = await getAdminTenantContext(strapi, await getAdminRequestUser(ctx, strapi));
             let user;
 
+            if (!tenantContext.isSuperAdmin) {
+              return ctx.forbidden('Tenant Admin users are not allowed to view user gallery images.');
+            }
+
             if (tenantContext.isSuperAdmin) {
               user = await strapi.entityService.findOne(APP_USER_UID, userId, {
                 fields: ['id'],
@@ -2681,6 +2685,10 @@ module.exports = {
               const expiresIn = parsePositiveInt(process.env.S3_PRESIGN_EXPIRES_IN) || 900;
               const tenantContext = await getAdminTenantContext(strapi, await getAdminRequestUser(ctx, strapi));
               let user;
+
+              if (!tenantContext.isSuperAdmin) {
+                return ctx.forbidden('Tenant Admin users are not allowed to view user selfie images.');
+              }
 
               if (tenantContext.isSuperAdmin) {
                 user = await strapi.entityService.findOne(APP_USER_UID, userId, {

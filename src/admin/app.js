@@ -215,6 +215,8 @@ const AppUserPanel = () => {
   const toggleNotification = useNotification();
   const [galleryItems, setGalleryItems] = useState([]);
   const [isGalleryLoading, setIsGalleryLoading] = useState(false);
+  const [isTenantAdminScoped, setIsTenantAdminScoped] = useState(false);
+  const [isCapabilitiesLoading, setIsCapabilitiesLoading] = useState(true);
 
   const isAppUser = slug === APP_USER_UID;
   const userId = initialData?.id;
@@ -234,8 +236,34 @@ const AppUserPanel = () => {
   useEffect(() => {
     let isMounted = true;
 
+    const loadCapabilities = async () => {
+      try {
+        setIsCapabilitiesLoading(true);
+        const capabilities = await fetchTenantAdminCapabilities();
+        if (!isMounted) return;
+        setIsTenantAdminScoped(capabilities?.isTenantAdminScoped === true);
+      } catch (_error) {
+        if (!isMounted) return;
+        setIsTenantAdminScoped(false);
+      } finally {
+        if (isMounted) {
+          setIsCapabilitiesLoading(false);
+        }
+      }
+    };
+
+    void loadCapabilities();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
     const loadGallery = async () => {
-      if (!isAppUser || !userId) {
+      if (!isAppUser || !userId || isTenantAdminScoped) {
         setGalleryItems([]);
         setIsGalleryLoading(false);
         return;
@@ -272,9 +300,9 @@ const AppUserPanel = () => {
     return () => {
       isMounted = false;
     };
-  }, [get, isAppUser, toggleNotification, userId]);
+  }, [get, isAppUser, isTenantAdminScoped, toggleNotification, userId]);
 
-  if (!isAppUser) return null;
+  if (!isAppUser || isCapabilitiesLoading) return null;
 
   const openUserContacts = () => {
     if (!userId) return;
@@ -339,33 +367,41 @@ const AppUserPanel = () => {
           Open User Contacts
         </Button>
 
-        <Button
-          variant="secondary"
-          size="S"
-          endIcon={<ExternalLink />}
-          onClick={openUserImages}
-          disabled={!userImagesUrl}
-          fullWidth
-        >
-          Open User Images (S3)
-        </Button>
+        {!isTenantAdminScoped ? (
+          <>
+            <Button
+              variant="secondary"
+              size="S"
+              endIcon={<ExternalLink />}
+              onClick={openUserImages}
+              disabled={!userImagesUrl}
+              fullWidth
+            >
+              Open User Images (S3)
+            </Button>
 
-        <Box>
-          <Typography variant="omega" textColor="neutral600">
-            Signed Gallery Preview
-          </Typography>
-          {isGalleryLoading ? (
+            <Box>
+              <Typography variant="omega" textColor="neutral600">
+                Signed Gallery Preview
+              </Typography>
+              {isGalleryLoading ? (
+                <Typography variant="omega" textColor="neutral500">
+                  Loading gallery images...
+                </Typography>
+              ) : (
+                <GalleryPreview items={galleryItems} />
+              )}
+            </Box>
+
             <Typography variant="omega" textColor="neutral500">
-              Loading gallery images...
+              Opens Contacts filtered by this user, the user's S3 image folder, and shows signed gallery previews.
             </Typography>
-          ) : (
-            <GalleryPreview items={galleryItems} />
-          )}
-        </Box>
-
-        <Typography variant="omega" textColor="neutral500">
-          Opens Contacts filtered by this user, the user's S3 image folder, and shows signed gallery previews.
-        </Typography>
+          </>
+        ) : (
+          <Typography variant="omega" textColor="neutral500">
+            Tenant Admin access does not include user image viewing.
+          </Typography>
+        )}
       </Flex>
     </Box>
   );
@@ -1316,12 +1352,40 @@ const AppUserSelfiePreview = () => {
   const toggleNotification = useNotification();
   const [mountNode, setMountNode] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [isTenantAdminScoped, setIsTenantAdminScoped] = useState(false);
+  const [isCapabilitiesLoading, setIsCapabilitiesLoading] = useState(true);
   const isAppUser = slug === APP_USER_UID;
   const selfieUrl = String(modifiedData?.image_url || initialData?.image_url || '').trim();
   const userId = initialData?.id;
 
   useEffect(() => {
-    if (!isAppUser) {
+    let isMounted = true;
+
+    const loadCapabilities = async () => {
+      try {
+        setIsCapabilitiesLoading(true);
+        const capabilities = await fetchTenantAdminCapabilities();
+        if (!isMounted) return;
+        setIsTenantAdminScoped(capabilities?.isTenantAdminScoped === true);
+      } catch (_error) {
+        if (!isMounted) return;
+        setIsTenantAdminScoped(false);
+      } finally {
+        if (isMounted) {
+          setIsCapabilitiesLoading(false);
+        }
+      }
+    };
+
+    void loadCapabilities();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAppUser || isTenantAdminScoped) {
       setMountNode(null);
       return undefined;
     }
@@ -1360,13 +1424,13 @@ const AppUserSelfiePreview = () => {
       disposed = true;
       window.clearInterval(intervalId);
     };
-  }, [isAppUser, initialData?.id]);
+  }, [isAppUser, isTenantAdminScoped, initialData?.id]);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadPreview = async () => {
-      if (!isAppUser || !userId || !selfieUrl) {
+      if (!isAppUser || !userId || !selfieUrl || isTenantAdminScoped) {
         setPreviewUrl('');
         return;
       }
@@ -1392,9 +1456,9 @@ const AppUserSelfiePreview = () => {
     return () => {
       isMounted = false;
     };
-  }, [get, isAppUser, selfieUrl, toggleNotification, userId]);
+  }, [get, isAppUser, isTenantAdminScoped, selfieUrl, toggleNotification, userId]);
 
-  if (!isAppUser || !mountNode) {
+  if (!isAppUser || isCapabilitiesLoading || isTenantAdminScoped || !mountNode) {
     return null;
   }
 
