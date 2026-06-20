@@ -546,6 +546,18 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       return ctx.forbidden('This admin user is not assigned to a tenant.');
     }
 
+    if (model === APP_TENANT_ADMIN_UID) {
+      const response = await buildScopedTenantAdminListResponse({
+        strapi,
+        adminUserId: adminUser.id,
+        tenantIds: tenantContext.tenantIds,
+        requestQuery: ctx.request.query || {},
+      });
+
+      ctx.body = response;
+      return;
+    }
+
     const { userAbility } = ctx.state;
     const entityManager = strapi.plugin('content-manager').service('entity-manager');
     const permissionChecker = strapi
@@ -572,47 +584,6 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
               $and: [permissionQuery.filters, { id: { $in: tenantContext.tenantIds } }],
             }
           : { id: { $in: tenantContext.tenantIds } };
-
-      const { results, pagination } = await entityManager.findPage(
-        {
-          ...permissionQuery,
-          filters: mergedFilters,
-          populate,
-        },
-        model
-      );
-
-      ctx.body = {
-        results,
-        pagination,
-      };
-      return;
-    }
-
-    if (model === APP_TENANT_ADMIN_UID) {
-      const permissionQuery = await permissionChecker.sanitizedQuery.read(ctx.request.query);
-      const populate = await strapi
-        .plugin('content-manager')
-        .service('populate-builder')(model)
-        .populateDeep(1)
-        .countRelations({ toOne: false, toMany: true })
-        .build();
-
-      const mergedFilters =
-        permissionQuery.filters && Object.keys(permissionQuery.filters).length
-          ? {
-              $and: [
-                permissionQuery.filters,
-                { admin_user_id: { $eq: adminUser.id } },
-                { tenant: { id: { $in: tenantContext.tenantIds } } },
-              ],
-            }
-          : {
-              $and: [
-                { admin_user_id: { $eq: adminUser.id } },
-                { tenant: { id: { $in: tenantContext.tenantIds } } },
-              ],
-            };
 
       const { results, pagination } = await entityManager.findPage(
         {
