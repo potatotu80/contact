@@ -2219,7 +2219,53 @@ module.exports = {
         }
 
         if (ctx.method === 'GET') {
-          return next();
+          const entityId = getContentManagerEntityId(ctx.request.path || '');
+
+          if (!entityId) {
+            ctx.body = await buildScopedTenantAdminListResponse({
+              strapi,
+              adminUserId: adminUser.id,
+              adminEmail: adminUser.email,
+              tenantIds: tenantContext.tenantIds,
+              requestQuery: ctx.request.query || {},
+            });
+            return;
+          }
+
+          const scopedRecord = await findScopedTenantAdminRecord({
+            strapi,
+            adminUserId: adminUser.id,
+            adminEmail: adminUser.email,
+            tenantIds: tenantContext.tenantIds,
+            entityId,
+          });
+
+          if (!scopedRecord) {
+            return ctx.forbidden('This record is outside your tenant admin scope.');
+          }
+
+          const entityManager = strapi.plugin('content-manager').service('entity-manager');
+          const populate = await strapi
+            .plugin('content-manager')
+            .service('populate-builder')(slug)
+            .populateFromQuery(ctx.query || {})
+            .populateDeep(Infinity)
+            .countRelations()
+            .build();
+
+          const entity = await entityManager.findOne(entityId, slug, {
+            populate: {
+              ...populate,
+              ...getForcedTenantPopulate(slug),
+            },
+          });
+
+          if (!entity) {
+            return ctx.notFound();
+          }
+
+          ctx.body = entity;
+          return;
         }
 
         return ctx.forbidden('Tenant admin users cannot modify tenant admin mappings.');
