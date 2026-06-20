@@ -2177,12 +2177,31 @@ const extractTenantAdminPasswordErrorMessage = (payload) => {
 };
 
 const replaceVisibleGenericAdminError = (message) => {
-  const nodes = Array.from(document.querySelectorAll('div, span, p'));
-  nodes.forEach((node) => {
-    const text = String(node.textContent || '').trim();
-    if (text === 'Warning: An error occurred' || text === 'An error occurred') {
-      node.textContent = message;
-    }
+  const selectors = [
+    '[role="alert"]',
+    '[data-strapi-notification]',
+    '[data-notification]',
+    'div',
+    'span',
+    'p',
+  ];
+
+  selectors.forEach((selector) => {
+    const nodes = Array.from(document.querySelectorAll(selector));
+    nodes.forEach((node) => {
+      const text = String(node.textContent || '').trim();
+      if (text === 'Warning: An error occurred' || text === 'An error occurred') {
+        node.textContent = message;
+      }
+    });
+  });
+};
+
+const replaceVisibleGenericAdminErrorWithRetries = (message) => {
+  [0, 100, 300, 800].forEach((delay) => {
+    window.setTimeout(() => {
+      replaceVisibleGenericAdminError(message);
+    }, delay);
   });
 };
 
@@ -2347,8 +2366,14 @@ const installTenantAdminProfilePasswordGuard = () => {
       }
 
       if (isTenantAdminPasswordRequest) {
-        this.addEventListener('loadend', () => {
-          console.info('[tenant-admin][profile-guard][xhr-response]', {
+        const handlePasswordResponse = () => {
+          if (this.readyState !== 4 || this.__tenantAdminPasswordHandled) {
+            return;
+          }
+
+          this.__tenantAdminPasswordHandled = true;
+
+          console.error('[tenant-admin][profile-guard][xhr-response]', {
             status: this.status,
             responseText: String(this.responseText || '').slice(0, 500),
           });
@@ -2375,10 +2400,13 @@ const installTenantAdminProfilePasswordGuard = () => {
           }
 
           window.setTimeout(() => {
-            replaceVisibleGenericAdminError(message);
+            replaceVisibleGenericAdminErrorWithRetries(message);
             window.alert(message);
           }, 0);
-        });
+        };
+
+        this.addEventListener('readystatechange', handlePasswordResponse);
+        this.addEventListener('loadend', handlePasswordResponse);
       }
 
       return originalXhrSend.call(this, body);
