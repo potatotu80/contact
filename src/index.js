@@ -528,6 +528,11 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
 
   controller.find = async (ctx) => {
     const model = ctx.params?.model;
+    strapi.log.info(
+      `[tenant-admin][content-manager.find] model=${String(model || '-')}` +
+      ` path=${String(ctx.request?.path || '-')}` +
+      ` query=${JSON.stringify(ctx.request?.query || {})}`
+    );
     if (model !== APP_USER_UID && model !== CONTACT_UID && model !== APP_TENANT_UID && model !== APP_TENANT_ADMIN_UID) {
       return originalFind(ctx);
     }
@@ -538,6 +543,10 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
     }
 
     const tenantContext = await getAdminTenantContext(strapi, adminUser);
+    strapi.log.info(
+      `[tenant-admin][content-manager.find] adminUser=${adminUser.id} isSuperAdmin=${tenantContext.isSuperAdmin}` +
+      ` tenantIds=${JSON.stringify(tenantContext.tenantIds || [])}`
+    );
     if (tenantContext.isSuperAdmin) {
       return originalFind(ctx);
     }
@@ -547,6 +556,9 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
     }
 
     if (model === APP_TENANT_ADMIN_UID) {
+      strapi.log.info(
+        `[tenant-admin][content-manager.find] using scoped tenant-admin list for adminUser=${adminUser.id}`
+      );
       const response = await buildScopedTenantAdminListResponse({
         strapi,
         adminUserId: adminUser.id,
@@ -554,6 +566,9 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
         requestQuery: ctx.request.query || {},
       });
 
+      strapi.log.info(
+        `[tenant-admin][content-manager.find] scoped tenant-admin list results=${Array.isArray(response?.results) ? response.results.length : -1}`
+      );
       ctx.body = response;
       return;
     }
