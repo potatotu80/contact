@@ -1385,7 +1385,16 @@ const AppUserSelfiePreview = () => {
   }, []);
 
   useEffect(() => {
+    const imageUrlContainer =
+      findFieldContainer('image_url') ||
+      findFieldContainerByLabel(['image_url', 'Image Url']);
+    const existingPreviewHost =
+      imageUrlContainer?.parentElement?.querySelector('[data-app-user-selfie-preview="true"]');
+
     if (!isAppUser || isTenantAdminScoped) {
+      if (existingPreviewHost) {
+        existingPreviewHost.remove();
+      }
       setMountNode(null);
       return undefined;
     }
@@ -1442,6 +1451,12 @@ const AppUserSelfiePreview = () => {
         setPreviewUrl(String(response?.data?.data?.signedUrl || selfieUrl).trim());
       } catch (error) {
         if (!isMounted) return;
+
+        const status = error?.response?.status || error?.status;
+        if (status === 403 || status === 404) {
+          setPreviewUrl('');
+          return;
+        }
 
         setPreviewUrl(selfieUrl);
         toggleNotification({
