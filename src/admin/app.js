@@ -2176,6 +2176,16 @@ const extractTenantAdminPasswordErrorMessage = (payload) => {
   return 'Unable to change password. Please check your current password and try again.';
 };
 
+const replaceVisibleGenericAdminError = (message) => {
+  const nodes = Array.from(document.querySelectorAll('div, span, p'));
+  nodes.forEach((node) => {
+    const text = String(node.textContent || '').trim();
+    if (text === 'Warning: An error occurred' || text === 'An error occurred') {
+      node.textContent = message;
+    }
+  });
+};
+
 const hideTenantAdminNavigation = () => {
   const links = Array.from(document.querySelectorAll('a, button, [role="menuitem"]'));
 
@@ -2264,62 +2274,63 @@ const installTenantAdminProfilePasswordGuard = () => {
   window.__tenantAdminProfilePasswordGuardInstalled = true;
 
   let isTenantAdminScoped = false;
-  const originalFetch = window.fetch.bind(window);
+  const originalXhrOpen = window.XMLHttpRequest?.prototype?.open;
+  const originalXhrSend = window.XMLHttpRequest?.prototype?.send;
 
-  window.fetch = async (...args) => {
-    const [input, init] = args;
-    const requestUrl = typeof input === 'string' ? input : input?.url || '';
-    const method =
-      String(
-        init?.method ||
-        (typeof input === 'object' && input ? input.method : '') ||
-        'GET'
-      ).toUpperCase();
-    const pathname = requestUrl
-      ? new URL(requestUrl, window.location.origin).pathname
-      : '';
-    const passwordPayload = extractPasswordChangePayload(init?.body);
-    const isTenantAdminPasswordRequest =
-      isTenantAdminScoped &&
-      method === 'PUT' &&
-      pathname === ADMIN_ME_API_PATH &&
-      passwordPayload &&
-      String(passwordPayload.currentPassword || '').trim() &&
-      String(passwordPayload.password || '').trim();
+  if (originalXhrOpen && originalXhrSend) {
+    window.XMLHttpRequest.prototype.open = function patchedOpen(method, url, ...rest) {
+      this.__tenantAdminMethod = String(method || 'GET').toUpperCase();
+      this.__tenantAdminUrl = String(url || '');
+      return originalXhrOpen.call(this, method, url, ...rest);
+    };
 
-    const response = await originalFetch(...args);
+    window.XMLHttpRequest.prototype.send = function patchedSend(body) {
+      const requestUrl = this.__tenantAdminUrl || '';
+      const pathname = requestUrl
+        ? new URL(requestUrl, window.location.origin).pathname
+        : '';
+      const passwordPayload = extractPasswordChangePayload(body);
+      const isTenantAdminPasswordRequest =
+        isTenantAdminScoped &&
+        this.__tenantAdminMethod === 'PUT' &&
+        pathname === ADMIN_ME_API_PATH &&
+        passwordPayload &&
+        String(passwordPayload.currentPassword || '').trim() &&
+        String(passwordPayload.password || '').trim();
 
-    if (!isTenantAdminPasswordRequest) {
-      return response;
-    }
-
-    if (response.ok) {
-      window.setTimeout(() => {
-        window.alert('Password changed successfully. Please log in again.');
-        window.location.assign(ADMIN_LOGOUT_PATH);
-        window.setTimeout(() => {
-          if (window.location.pathname !== ADMIN_LOGIN_PATH) {
-            window.location.assign(ADMIN_LOGIN_PATH);
+      if (isTenantAdminPasswordRequest) {
+        this.addEventListener('loadend', () => {
+          if (this.status >= 200 && this.status < 300) {
+            window.setTimeout(() => {
+              window.alert('Password changed successfully. Please log in again.');
+              window.location.assign(ADMIN_LOGOUT_PATH);
+              window.setTimeout(() => {
+                if (window.location.pathname !== ADMIN_LOGIN_PATH) {
+                  window.location.assign(ADMIN_LOGIN_PATH);
+                }
+              }, 800);
+            }, 0);
+            return;
           }
-        }, 800);
-      }, 0);
-      return response;
-    }
 
-    try {
-      const payload = await response.clone().json();
-      const message = extractTenantAdminPasswordErrorMessage(payload);
-      window.setTimeout(() => {
-        window.alert(message);
-      }, 0);
-    } catch (_error) {
-      window.setTimeout(() => {
-        window.alert('Unable to change password. Please try again.');
-      }, 0);
-    }
+          let message = 'Unable to change password. Please try again.';
+          try {
+            const payload = JSON.parse(String(this.responseText || '{}'));
+            message = extractTenantAdminPasswordErrorMessage(payload);
+          } catch (_error) {
+            // Keep fallback message.
+          }
 
-    return response;
-  };
+          window.setTimeout(() => {
+            replaceVisibleGenericAdminError(message);
+            window.alert(message);
+          }, 0);
+        });
+      }
+
+      return originalXhrSend.call(this, body);
+    };
+  }
 
   void fetchTenantAdminCapabilities()
     .then((capabilities) => {
