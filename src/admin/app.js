@@ -2205,6 +2205,29 @@ const replaceVisibleGenericAdminErrorWithRetries = (message) => {
   });
 };
 
+const forceTenantAdminLogoutAfterPasswordChange = () => {
+  try {
+    window.localStorage.clear();
+  } catch (_error) {
+    // Ignore storage cleanup failures.
+  }
+
+  try {
+    window.sessionStorage.clear();
+  } catch (_error) {
+    // Ignore storage cleanup failures.
+  }
+
+  const loginUrl = `${ADMIN_LOGIN_PATH}?info=password-changed`;
+  window.location.replace(ADMIN_LOGOUT_PATH);
+  window.setTimeout(() => {
+    window.location.replace(loginUrl);
+  }, 400);
+  window.setTimeout(() => {
+    window.location.href = loginUrl;
+  }, 1200);
+};
+
 const hideTenantAdminNavigation = () => {
   const links = Array.from(document.querySelectorAll('a, button, [role="menuitem"]'));
 
@@ -2380,12 +2403,7 @@ const installTenantAdminProfilePasswordGuard = () => {
           if (this.status >= 200 && this.status < 300) {
             window.setTimeout(() => {
               window.alert('Password changed successfully. Please log in again.');
-              window.location.assign(ADMIN_LOGOUT_PATH);
-              window.setTimeout(() => {
-                if (window.location.pathname !== ADMIN_LOGIN_PATH) {
-                  window.location.assign(ADMIN_LOGIN_PATH);
-                }
-              }, 800);
+              forceTenantAdminLogoutAfterPasswordChange();
             }, 0);
             return;
           }
