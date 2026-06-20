@@ -2443,29 +2443,45 @@ module.exports = {
               }
 
               const tenantContext = await getAdminTenantContext(strapi, adminUser);
-              const tenantAdminRecord =
-                !tenantContext.isSuperAdmin && tenantContext.tenantIds.length
-                  ? await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
-                      filters: {
-                        admin_user_id: {
-                          $eq: adminUser.id,
-                        },
-                        tenant: {
-                          id: {
-                            $in: tenantContext.tenantIds,
-                          },
-                        },
+              let tenantAdminRecordId = null;
+
+              if (!tenantContext.isSuperAdmin && tenantContext.tenantIds.length) {
+                const candidateRecords = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
+                  filters: {
+                    admin_user_id: {
+                      $eq: adminUser.id,
+                    },
+                    tenant: {
+                      id: {
+                        $in: tenantContext.tenantIds,
                       },
-                      fields: ['id'],
-                      sort: ['id:desc'],
-                      limit: 1,
-                    })
-                  : [];
+                    },
+                  },
+                  fields: ['id'],
+                  sort: ['id:desc'],
+                  limit: 20,
+                });
+
+                for (const candidate of candidateRecords || []) {
+                  const scopedRecord = await findScopedTenantAdminRecord({
+                    strapi,
+                    adminUserId: adminUser.id,
+                    tenantIds: tenantContext.tenantIds,
+                    entityId: candidate?.id,
+                  });
+
+                  if (scopedRecord?.id) {
+                    tenantAdminRecordId = scopedRecord.id;
+                    break;
+                  }
+                }
+              }
+
               ctx.body = {
                 data: {
                   isTenantAdminScoped: !tenantContext.isSuperAdmin && tenantContext.tenantIds.length > 0,
                   canDeleteManagedRecords: tenantContext.isSuperAdmin,
-                  tenantAdminRecordId: tenantAdminRecord?.[0]?.id || null,
+                  tenantAdminRecordId,
                 },
               };
             },

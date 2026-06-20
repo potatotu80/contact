@@ -2372,7 +2372,7 @@ const installTenantAdminSettingsGuard = () => {
 
     if (
       tenantAdminDetailPath &&
-      window.location.pathname === '/admin/'
+      (window.location.pathname === '/admin/' || window.location.pathname === '/admin')
     ) {
       try {
         window.sessionStorage.removeItem(TENANT_ADMIN_NAV_REDIRECT_KEY);
