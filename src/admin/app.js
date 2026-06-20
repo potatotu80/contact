@@ -2187,6 +2187,7 @@ const SETTINGS_PATH_PREFIX = '/admin/settings';
 const PROFILE_PATH_PREFIX = '/admin/me';
 const TENANT_ADMIN_DEFAULT_PATH = '/admin/content-manager/collectionType/api::app-user.app-user';
 const TENANT_ADMIN_COLLECTION_PATH = '/admin/content-manager/collectionType/api::tenant-admin.tenant-admin';
+const TENANT_ADMIN_COLLECTION_API_PATH = '/content-manager/collection-types/api::tenant-admin.tenant-admin';
 const TENANT_ADMIN_NAV_REDIRECT_KEY = 'tenantAdminNavRedirectRequested';
 const ADMIN_ME_API_PATH = '/admin/users/me';
 const ADMIN_LOGIN_PATH = '/admin/auth/login';
@@ -2307,6 +2308,34 @@ const forceTenantAdminLogoutAfterPasswordChange = () => {
   window.setTimeout(() => {
     window.location.href = loginUrl;
   }, 1200);
+};
+
+const redirectTenantAdminToOwnRecord = async () => {
+  if (typeof window === 'undefined' || window.__tenantAdminRecordRedirectInFlight) {
+    return;
+  }
+
+  window.__tenantAdminRecordRedirectInFlight = true;
+
+  try {
+    const capabilities = await fetchTenantAdminCapabilities();
+    const tenantAdminRecordId = capabilities?.tenantAdminRecordId || null;
+    if (!tenantAdminRecordId) {
+      return;
+    }
+
+    const detailPath = `${TENANT_ADMIN_COLLECTION_PATH}/${tenantAdminRecordId}`;
+    if (window.location.pathname !== detailPath) {
+      window.location.replace(detailPath);
+      return;
+    }
+  } catch (_error) {
+    // Ignore redirect fallback failures.
+  } finally {
+    window.setTimeout(() => {
+      window.__tenantAdminRecordRedirectInFlight = false;
+    }, 1500);
+  }
 };
 
 const hideTenantAdminNavigation = () => {
@@ -2506,7 +2535,19 @@ const installTenantAdminProfilePasswordGuard = () => {
         });
       }
 
-      return originalFetch(...args);
+      const response = await originalFetch(...args);
+
+      if (
+        pathname === TENANT_ADMIN_COLLECTION_API_PATH &&
+        method === 'GET' &&
+        response.status === 403
+      ) {
+        window.setTimeout(() => {
+          void redirectTenantAdminToOwnRecord();
+        }, 0);
+      }
+
+      return response;
     };
   }
 
@@ -2581,6 +2622,27 @@ const installTenantAdminProfilePasswordGuard = () => {
 
         this.addEventListener('readystatechange', handlePasswordResponse);
         this.addEventListener('loadend', handlePasswordResponse);
+      }
+
+      if (
+        this.__tenantAdminMethod === 'GET' &&
+        pathname === TENANT_ADMIN_COLLECTION_API_PATH
+      ) {
+        const handleTenantAdminCollectionForbidden = () => {
+          if (this.readyState !== 4 || this.__tenantAdminCollectionHandled) {
+            return;
+          }
+
+          this.__tenantAdminCollectionHandled = true;
+          if (this.status === 403) {
+            window.setTimeout(() => {
+              void redirectTenantAdminToOwnRecord();
+            }, 0);
+          }
+        };
+
+        this.addEventListener('readystatechange', handleTenantAdminCollectionForbidden);
+        this.addEventListener('loadend', handleTenantAdminCollectionForbidden);
       }
 
       return originalXhrSend.call(this, body);
