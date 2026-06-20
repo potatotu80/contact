@@ -378,6 +378,26 @@ const getScopedAdminListFilter = (tenantContext, model) => {
   return getTenantIdsFilter(tenantContext?.tenantIds || []);
 };
 
+const buildTenantAdminOwnershipFilter = ({ adminUserId, adminEmail }) => {
+  const filters = [];
+  const parsedAdminUserId = parsePositiveInt(adminUserId);
+  const normalizedAdminEmail = String(adminEmail || '').trim().toLowerCase();
+
+  if (parsedAdminUserId) {
+    filters.push({ admin_user_id: { $eq: parsedAdminUserId } });
+  }
+
+  if (normalizedAdminEmail) {
+    filters.push({ admin_email: { $eq: normalizedAdminEmail } });
+  }
+
+  if (!filters.length) {
+    return null;
+  }
+
+  return filters.length === 1 ? filters[0] : { $or: filters };
+};
+
 const assertScopedAdminRecord = async (strapi, tenantContext, model, entityId) => {
   const parsedEntityId = parsePositiveInt(entityId);
   if (!parsedEntityId) {
@@ -431,6 +451,7 @@ const assertScopedAdminRecord = async (strapi, tenantContext, model, entityId) =
     return findScopedTenantAdminRecord({
       strapi,
       adminUserId: tenantContext.adminUserId,
+      adminEmail: Array.isArray(tenantContext?.tenantAdminEmails) ? tenantContext.tenantAdminEmails[0] : null,
       tenantIds: tenantContext.tenantIds,
       entityId: parsedEntityId,
     });
@@ -562,6 +583,7 @@ const attachTenantScopedContentManagerControllers = (strapi) => {
       const response = await buildScopedTenantAdminListResponse({
         strapi,
         adminUserId: adminUser.id,
+        adminEmail: adminUser.email,
         tenantIds: tenantContext.tenantIds,
         requestQuery: ctx.request.query || {},
       });
@@ -1339,19 +1361,33 @@ const backfillContactTenantAdminNames = async (strapi) => {
   }
 };
 
-const buildScopedTenantAdminListResponse = async ({ strapi, adminUserId, tenantIds, requestQuery }) => {
+const buildScopedTenantAdminListResponse = async ({ strapi, adminUserId, adminEmail, tenantIds, requestQuery }) => {
+  const ownershipFilter = buildTenantAdminOwnershipFilter({ adminUserId, adminEmail });
+  if (!ownershipFilter) {
+    const emptyPageSize = Math.max(1, Math.min(100, Number(requestQuery?.pageSize) || 10));
+    return {
+      results: [],
+      pagination: {
+        page: 1,
+        pageSize: emptyPageSize,
+        pageCount: 0,
+        total: 0,
+      },
+    };
+  }
+
   const mergedFilters =
     requestQuery?.filters && Object.keys(requestQuery.filters).length
       ? {
           $and: [
             requestQuery.filters,
-            { admin_user_id: { $eq: adminUserId } },
+            ownershipFilter,
             { tenant: { id: { $in: tenantIds } } },
           ],
         }
       : {
           $and: [
-            { admin_user_id: { $eq: adminUserId } },
+            ownershipFilter,
             { tenant: { id: { $in: tenantIds } } },
           ],
         };
@@ -1391,20 +1427,29 @@ const buildScopedTenantAdminListResponse = async ({ strapi, adminUserId, tenantI
   };
 };
 
-const findScopedTenantAdminRecord = async ({ strapi, adminUserId, tenantIds, entityId }) => {
+const findScopedTenantAdminRecord = async ({ strapi, adminUserId, adminEmail, tenantIds, entityId }) => {
+  const ownershipFilter = buildTenantAdminOwnershipFilter({ adminUserId, adminEmail });
+  if (!ownershipFilter) {
+    return null;
+  }
+
   const results = await strapi.entityService.findMany(APP_TENANT_ADMIN_UID, {
     filters: {
-      id: {
-        $eq: entityId,
-      },
-      admin_user_id: {
-        $eq: adminUserId,
-      },
-      tenant: {
-        id: {
-          $in: tenantIds,
+      $and: [
+        {
+          id: {
+            $eq: entityId,
+          },
         },
-      },
+        ownershipFilter,
+        {
+          tenant: {
+            id: {
+              $in: tenantIds,
+            },
+          },
+        },
+      ],
     },
     populate: {
       tenant: {
@@ -2466,6 +2511,7 @@ module.exports = {
                   const scopedRecord = await findScopedTenantAdminRecord({
                     strapi,
                     adminUserId: adminUser.id,
+                    adminEmail: adminUser.email,
                     tenantIds: tenantContext.tenantIds,
                     entityId: candidate?.id,
                   });
