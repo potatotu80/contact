@@ -2189,6 +2189,7 @@ const TENANT_ADMIN_DEFAULT_PATH = '/admin/content-manager/collectionType/api::ap
 const TENANT_ADMIN_COLLECTION_PATH = '/admin/content-manager/collectionType/api::tenant-admin.tenant-admin';
 const TENANT_ADMIN_COLLECTION_API_PATH = '/content-manager/collection-types/api::tenant-admin.tenant-admin';
 const TENANT_ADMIN_NAV_REDIRECT_KEY = 'tenantAdminNavRedirectRequested';
+const TENANT_ADMIN_TARGET_PATH_KEY = 'tenantAdminTargetPath';
 const ADMIN_ME_API_PATH = '/admin/users/me';
 const ADMIN_LOGIN_PATH = '/admin/auth/login';
 const ADMIN_LOGOUT_PATH = '/admin/logout';
@@ -2325,8 +2326,25 @@ const redirectTenantAdminToOwnRecord = async () => {
     }
 
     const detailPath = `${TENANT_ADMIN_COLLECTION_PATH}/${tenantAdminRecordId}`;
+    try {
+      window.sessionStorage.setItem(TENANT_ADMIN_TARGET_PATH_KEY, detailPath);
+      window.sessionStorage.setItem(TENANT_ADMIN_NAV_REDIRECT_KEY, '1');
+    } catch (_error) {
+      // Ignore session storage failures.
+    }
+
     if (window.location.pathname !== detailPath) {
       window.location.replace(detailPath);
+      window.setTimeout(() => {
+        if (window.location.pathname !== detailPath) {
+          window.location.assign(detailPath);
+        }
+      }, 150);
+      window.setTimeout(() => {
+        if (window.location.pathname !== detailPath) {
+          window.location.href = detailPath;
+        }
+      }, 600);
       return;
     }
   } catch (_error) {
@@ -2387,9 +2405,16 @@ const installTenantAdminSettingsGuard = () => {
     }
 
     hideTenantAdminNavigation();
+    let persistedTenantAdminDetailPath = null;
+    try {
+      persistedTenantAdminDetailPath = window.sessionStorage.getItem(TENANT_ADMIN_TARGET_PATH_KEY) || null;
+    } catch (_error) {
+      persistedTenantAdminDetailPath = null;
+    }
+
     const tenantAdminDetailPath = tenantAdminRecordId
       ? `${TENANT_ADMIN_COLLECTION_PATH}/${tenantAdminRecordId}`
-      : null;
+      : persistedTenantAdminDetailPath;
 
     if (
       tenantAdminDetailPath &&
@@ -2409,6 +2434,11 @@ const installTenantAdminSettingsGuard = () => {
         // Ignore session storage failures.
       }
       window.location.replace(tenantAdminDetailPath);
+      window.setTimeout(() => {
+        if (window.location.pathname !== tenantAdminDetailPath) {
+          window.location.assign(tenantAdminDetailPath);
+        }
+      }, 150);
       return;
     }
 
