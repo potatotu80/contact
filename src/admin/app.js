@@ -2141,8 +2141,10 @@ const config = {
 };
 
 const SETTINGS_USERS_PATH = '/admin/settings/users';
-const syncSettingsUsersQuery = () => {
-  if (!window.location.pathname.startsWith(SETTINGS_USERS_PATH)) {
+const APP_USERS_COLLECTION_PATH = '/admin/content-manager/collectionType/api::app-user.app-user';
+
+const syncDescendingIdSort = (pathPrefix) => {
+  if (!window.location.pathname.startsWith(pathPrefix)) {
     return;
   }
 
@@ -2158,6 +2160,14 @@ const syncSettingsUsersQuery = () => {
     window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
     window.dispatchEvent(new PopStateEvent('popstate'));
   }
+};
+
+const syncSettingsUsersQuery = () => {
+  syncDescendingIdSort(SETTINGS_USERS_PATH);
+};
+
+const syncAppUsersQuery = () => {
+  syncDescendingIdSort(APP_USERS_COLLECTION_PATH);
 };
 
 const installSettingsUsersSortGuard = () => {
@@ -2180,6 +2190,28 @@ const installSettingsUsersSortGuard = () => {
   wrapHistoryMethod('pushState');
   wrapHistoryMethod('replaceState');
   window.addEventListener('popstate', syncSettingsUsersQuery);
+};
+
+const installAppUsersSortGuard = () => {
+  if (typeof window === 'undefined' || window.__appUsersSortGuardInstalled) {
+    return;
+  }
+
+  window.__appUsersSortGuardInstalled = true;
+  syncAppUsersQuery();
+
+  const wrapHistoryMethod = (methodName) => {
+    const original = window.history[methodName];
+    window.history[methodName] = function wrappedHistoryMethod(...args) {
+      const result = original.apply(this, args);
+      window.setTimeout(syncAppUsersQuery, 0);
+      return result;
+    };
+  };
+
+  wrapHistoryMethod('pushState');
+  wrapHistoryMethod('replaceState');
+  window.addEventListener('popstate', syncAppUsersQuery);
 };
 
 const TENANT_ADMIN_CAPABILITIES_PATH = '/admin/tenant-admin/capabilities';
@@ -2688,6 +2720,7 @@ const installTenantAdminProfilePasswordGuard = () => {
 
 const bootstrap = (app) => {
   installSettingsUsersSortGuard();
+  installAppUsersSortGuard();
   installTenantAdminSettingsGuard();
   installTenantAdminProfilePasswordGuard();
 
