@@ -1938,6 +1938,7 @@ const ContactExportAction = () => {
   const [canExportContacts, setCanExportContacts] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const toggleNotification = useNotification();
+  const { get } = useFetchClient();
   const match = useRouteMatch('/content-manager/collectionType/:slug');
   const slug = match?.params?.slug;
   const isContactList = slug === CONTACT_UID;
@@ -1974,7 +1975,7 @@ const ContactExportAction = () => {
     return null;
   }
 
-  const exportContacts = () => {
+  const exportContacts = async () => {
     if (isExporting) return;
 
     try {
@@ -1990,12 +1991,25 @@ const ContactExportAction = () => {
         exportUrl.searchParams.set('selectedIds', selectedIds.join(','));
       }
 
+      const response = await get('/contact-export', {
+        params: Object.fromEntries(exportUrl.searchParams.entries()),
+        responseType: 'blob',
+      });
+
+      const contentDisposition = response?.headers?.['content-disposition'] || '';
+      const filenameMatch = contentDisposition.match(/filename="([^"]+)"/i);
+      const filename = filenameMatch?.[1] || 'contacts-export.csv';
+      const blob = response?.data instanceof Blob
+        ? response.data
+        : new Blob([response?.data], { type: 'text/csv;charset=utf-8' });
+      const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = exportUrl.toString();
-      link.rel = 'noopener noreferrer';
+      link.href = downloadUrl;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
 
       toggleNotification({
         type: 'success',
@@ -2019,7 +2033,9 @@ const ContactExportAction = () => {
     <Button
       variant="secondary"
       size="S"
-      onClick={exportContacts}
+      onClick={() => {
+        void exportContacts();
+      }}
       disabled={isExporting}
     >
       {isExporting ? 'Exporting...' : 'Export Contacts'}
