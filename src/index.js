@@ -2708,8 +2708,29 @@ module.exports = {
         path: '/api/app-bootstrap',
         handler: async (ctx) => {
           const qrToken = String(ctx.query?.qrToken || ctx.query?.token || '').trim();
+          const sharedApp = await findSharedAppConfig(strapi);
+          const latestVersionCode = parsePositiveInt(sharedApp?.android_latest_version_code) || null;
+          const latestVersionName = String(sharedApp?.android_latest_version_name || '').trim() || null;
+          const androidApkUrl = ensureAbsoluteUrl(String(sharedApp?.android_apk_url || '').trim()) || null;
+
           if (!qrToken) {
-            return ctx.badRequest('A qrToken query parameter is required.');
+            ctx.body = {
+              data: {
+                tenantCode: '',
+                tenantName: '',
+                appDisplayName: 'Member Reward',
+                primaryColor: null,
+                supportEmail: null,
+                deepLinkScheme: getSharedDeepLinkScheme(),
+                androidApplicationId: getSharedAndroidApplicationId(),
+                androidApkUrl,
+                latestVersionCode,
+                latestVersionName,
+                forceUpdate: sharedApp?.android_force_update === true,
+                qrCodeUrl: null,
+              },
+            };
+            return;
           }
 
           const launchContext = await findTenantLaunchByQrToken(strapi, qrToken);
@@ -2719,10 +2740,6 @@ module.exports = {
 
           const tenant = launchContext.tenant;
           const tenantAdmin = launchContext.tenantAdmin;
-          const sharedApp = await findSharedAppConfig(strapi);
-          const latestVersionCode = parsePositiveInt(sharedApp?.android_latest_version_code) || null;
-          const latestVersionName = String(sharedApp?.android_latest_version_name || '').trim() || null;
-          const androidApkUrl = ensureAbsoluteUrl(String(sharedApp?.android_apk_url || '').trim()) || null;
 
           ctx.body = {
             data: {
