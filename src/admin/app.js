@@ -1935,8 +1935,7 @@ const extractSelectedContactIds = () => {
 };
 
 const ContactExportAction = () => {
-  const [isCapabilityLoading, setIsCapabilityLoading] = useState(true);
-  const [canExportContacts, setCanExportContacts] = useState(false);
+  const [canExportContacts, setCanExportContacts] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const toggleNotification = useNotification();
   const match = useRouteMatch('/content-manager/collectionType/:slug');
@@ -1949,24 +1948,18 @@ const ContactExportAction = () => {
     const loadCapabilities = async () => {
       if (!isContactList) {
         if (isMounted) {
-          setCanExportContacts(false);
-          setIsCapabilityLoading(false);
+          setCanExportContacts(true);
         }
         return;
       }
 
       try {
-        setIsCapabilityLoading(true);
         const capabilities = await fetchTenantAdminCapabilities();
         if (!isMounted) return;
         setCanExportContacts(capabilities?.canExportContacts !== false);
       } catch (_error) {
         if (!isMounted) return;
-        setCanExportContacts(false);
-      } finally {
-        if (isMounted) {
-          setIsCapabilityLoading(false);
-        }
+        setCanExportContacts(true);
       }
     };
 
@@ -1977,7 +1970,7 @@ const ContactExportAction = () => {
     };
   }, [isContactList]);
 
-  if (!isContactList || isCapabilityLoading || !canExportContacts) {
+  if (!isContactList || !canExportContacts) {
     return null;
   }
 
