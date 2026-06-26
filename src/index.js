@@ -1341,7 +1341,7 @@ const syncContactListConfiguration = async (strapi) => {
       ...(configuration.settings || {}),
       mainField: 'name',
       defaultSortBy: 'id',
-      defaultSortOrder: 'ASC',
+      defaultSortOrder: 'DESC',
     },
     layouts: {
       ...(configuration.layouts || {}),
