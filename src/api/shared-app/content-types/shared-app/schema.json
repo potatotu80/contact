@@ -21,6 +21,16 @@
     "android_apk_url": {
       "type": "string"
     },
+    "android_latest_version_code": {
+      "type": "integer"
+    },
+    "android_latest_version_name": {
+      "type": "string"
+    },
+    "android_force_update": {
+      "type": "boolean",
+      "default": false
+    },
     "notes": {
       "type": "text"
     },

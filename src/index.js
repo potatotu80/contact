@@ -1886,7 +1886,15 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
 
 const findSharedAppConfig = async (strapi) =>
   strapi.db.query(SHARED_APP_UID).findOne({
-    select: ['id', 'android_apk_url', 'enable_twilio_voice_panel', 'enable_tenant_admin_contact_export'],
+    select: [
+      'id',
+      'android_apk_url',
+      'android_latest_version_code',
+      'android_latest_version_name',
+      'android_force_update',
+      'enable_twilio_voice_panel',
+      'enable_tenant_admin_contact_export',
+    ],
   });
 
 const normalizeExportSelectedIds = (value) => {
@@ -2711,6 +2719,10 @@ module.exports = {
 
           const tenant = launchContext.tenant;
           const tenantAdmin = launchContext.tenantAdmin;
+          const sharedApp = await findSharedAppConfig(strapi);
+          const latestVersionCode = parsePositiveInt(sharedApp?.android_latest_version_code) || null;
+          const latestVersionName = String(sharedApp?.android_latest_version_name || '').trim() || null;
+          const androidApkUrl = ensureAbsoluteUrl(String(sharedApp?.android_apk_url || '').trim()) || null;
 
           ctx.body = {
             data: {
@@ -2721,6 +2733,10 @@ module.exports = {
               supportEmail: tenant.support_email || null,
               deepLinkScheme: getSharedDeepLinkScheme(),
               androidApplicationId: getSharedAndroidApplicationId(),
+              androidApkUrl,
+              latestVersionCode,
+              latestVersionName,
+              forceUpdate: sharedApp?.android_force_update === true,
               qrCodeUrl: tenantAdmin?.qr_code_url || null,
             },
           };
