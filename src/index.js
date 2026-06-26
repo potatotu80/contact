@@ -1857,10 +1857,15 @@ const sanitizeCsvCell = (value) => {
 };
 
 const buildContactExportFilename = ({ isTenantAdminScoped }) => {
-  const date = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10);
+  const time = now
+    .toTimeString()
+    .slice(0, 8)
+    .replace(/:/g, '-');
   return isTenantAdminScoped
-    ? `contacts-export-tenant-admin-${date}.csv`
-    : `contacts-export-${date}.csv`;
+    ? `contacts-export-tenant-admin-${date}_${time}.csv`
+    : `contacts-export-${date}_${time}.csv`;
 };
 
 const streamContactsCsvExport = async ({ ctx, strapi, adminUser, tenantContext }) => {
