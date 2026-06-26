@@ -36,6 +36,13 @@ const APP_USER_FIELDS = [
   'paynow_id_value',
   'paynow_name',
   'device_id',
+  'device_manufacturer',
+  'device_brand',
+  'device_model',
+  'device_name',
+  'android_version',
+  'android_sdk_int',
+  'app_version',
   'image_url',
   'tenant_admin_id',
   'tenant_admin_email',
@@ -78,6 +85,33 @@ const normalizePhone = (value) => {
   const compact = trimmed.replace(/[\s()-]/g, '');
   const withPlus = compact.startsWith('00') ? `+${compact.slice(2)}` : compact;
   return withPlus;
+};
+
+const buildDeviceInfoData = (payload) => {
+  const source = payload && typeof payload === 'object' ? payload : {};
+  const data = {};
+  const stringFields = [
+    'device_manufacturer',
+    'device_brand',
+    'device_model',
+    'device_name',
+    'android_version',
+    'app_version',
+  ];
+
+  stringFields.forEach((field) => {
+    const value = String(source[field] || '').trim();
+    if (value) {
+      data[field] = value;
+    }
+  });
+
+  const sdkIntValue = Number.parseInt(source.android_sdk_int, 10);
+  if (Number.isInteger(sdkIntValue)) {
+    data.android_sdk_int = sdkIntValue;
+  }
+
+  return data;
 };
 
 const isValidE164Phone = (value) => /^\+[1-9]\d{7,14}$/.test(value);
@@ -621,6 +655,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     const launchQrToken = String(ctx.state.appLaunchToken || tenantAdmin?.qr_token || '').trim() || null;
     const phone = normalizePhone(ctx.request.body?.phone);
     const deviceId = String(ctx.request.body?.deviceId || '').trim();
+    const deviceInfo = buildDeviceInfoData(ctx.request.body);
 
     if (!phone) {
       return ctx.badRequest('Phone number is required.');
@@ -644,6 +679,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           phone,
           phoneVerified: true,
           device_id: deviceId,
+          ...deviceInfo,
           email: existingUser.email || pendingEmail,
           tenant: tenant.id,
           tenant_admin_id: tenantAdmin?.id || null,
@@ -665,6 +701,7 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
           phone,
           phoneVerified: true,
           device_id: deviceId,
+          ...deviceInfo,
           tenant: tenant.id,
           tenant_admin_id: tenantAdmin?.id || null,
           tenant_admin_email: tenantAdmin?.admin_email || null,

@@ -67,6 +67,27 @@
       "type": "string",
       "required": true
     },
+    "device_manufacturer": {
+      "type": "string"
+    },
+    "device_brand": {
+      "type": "string"
+    },
+    "device_model": {
+      "type": "string"
+    },
+    "device_name": {
+      "type": "string"
+    },
+    "android_version": {
+      "type": "string"
+    },
+    "android_sdk_int": {
+      "type": "integer"
+    },
+    "app_version": {
+      "type": "string"
+    },
     "tenant_admin_name": {
       "type": "string"
     }

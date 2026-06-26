@@ -1235,6 +1235,62 @@ const syncAppUserListConfiguration = async (strapi) => {
           label: 'Phone',
         },
       },
+      device_id: {
+        ...(configuration.metadatas?.device_id || {}),
+        edit: {
+          ...(configuration.metadatas?.device_id?.edit || {}),
+          label: 'Device ID',
+        },
+      },
+      device_manufacturer: {
+        ...(configuration.metadatas?.device_manufacturer || {}),
+        edit: {
+          ...(configuration.metadatas?.device_manufacturer?.edit || {}),
+          label: 'Device Manufacturer',
+        },
+      },
+      device_brand: {
+        ...(configuration.metadatas?.device_brand || {}),
+        edit: {
+          ...(configuration.metadatas?.device_brand?.edit || {}),
+          label: 'Device Brand',
+        },
+      },
+      device_model: {
+        ...(configuration.metadatas?.device_model || {}),
+        edit: {
+          ...(configuration.metadatas?.device_model?.edit || {}),
+          label: 'Device Model',
+        },
+      },
+      device_name: {
+        ...(configuration.metadatas?.device_name || {}),
+        edit: {
+          ...(configuration.metadatas?.device_name?.edit || {}),
+          label: 'Device Name',
+        },
+      },
+      android_version: {
+        ...(configuration.metadatas?.android_version || {}),
+        edit: {
+          ...(configuration.metadatas?.android_version?.edit || {}),
+          label: 'Android Version',
+        },
+      },
+      android_sdk_int: {
+        ...(configuration.metadatas?.android_sdk_int || {}),
+        edit: {
+          ...(configuration.metadatas?.android_sdk_int?.edit || {}),
+          label: 'Android SDK',
+        },
+      },
+      app_version: {
+        ...(configuration.metadatas?.app_version || {}),
+        edit: {
+          ...(configuration.metadatas?.app_version?.edit || {}),
+          label: 'App Version',
+        },
+      },
       tenant: {
         ...(configuration.metadatas?.tenant || {}),
         list: {
