@@ -27,6 +27,10 @@
     "enable_twilio_voice_panel": {
       "type": "boolean",
       "default": true
+    },
+    "enable_tenant_admin_contact_export": {
+      "type": "boolean",
+      "default": true
     }
   }
 }

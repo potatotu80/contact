@@ -1,6 +1,7 @@
 'use strict';
 
 const AWS = require('aws-sdk');
+const { format: formatCsv } = require('fast-csv');
 const fs = require('fs/promises');
 const path = require('path');
 const QRCode = require('qrcode');
@@ -1829,8 +1830,165 @@ const renderQrLandingHtml = ({ tenant, tenantCode, referralCode, qrCodeUrl, qrTo
 
 const findSharedAppConfig = async (strapi) =>
   strapi.db.query(SHARED_APP_UID).findOne({
-    select: ['id', 'android_apk_url', 'enable_twilio_voice_panel'],
+    select: ['id', 'android_apk_url', 'enable_twilio_voice_panel', 'enable_tenant_admin_contact_export'],
   });
+
+const normalizeExportSelectedIds = (value) => {
+  if (!value) {
+    return [];
+  }
+
+  const candidates = Array.isArray(value)
+    ? value
+    : String(value)
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+  return [...new Set(candidates.map((entry) => parsePositiveInt(entry)).filter(Boolean))];
+};
+
+const sanitizeCsvCell = (value) => {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  return String(value).replace(/\r?\n/g, ' ').trim();
+};
+
+const buildContactExportFilename = ({ isTenantAdminScoped }) => {
+  const date = new Date().toISOString().slice(0, 10);
+  return isTenantAdminScoped
+    ? `contacts-export-tenant-admin-${date}.csv`
+    : `contacts-export-${date}.csv`;
+};
+
+const streamContactsCsvExport = async ({ ctx, strapi, adminUser, tenantContext }) => {
+  const sharedApp = await findSharedAppConfig(strapi);
+  const isTenantAdminScoped = !tenantContext.isSuperAdmin && tenantContext.tenantIds.length > 0;
+
+  if (isTenantAdminScoped && sharedApp?.enable_tenant_admin_contact_export === false) {
+    return ctx.forbidden('Contact export is disabled for Tenant Admin users.');
+  }
+
+  const { userAbility } = ctx.state;
+  const permissionChecker = strapi
+    .plugin('content-manager')
+    .service('permission-checker')
+    .create({ userAbility, model: CONTACT_UID });
+
+  if (permissionChecker.cannot.read()) {
+    return ctx.forbidden();
+  }
+
+  const rawQuery = { ...(ctx.request?.query || {}) };
+  const selectedIds = normalizeExportSelectedIds(rawQuery.selectedIds);
+  delete rawQuery.selectedIds;
+  delete rawQuery.page;
+  delete rawQuery.pageSize;
+  delete rawQuery.start;
+  delete rawQuery.limit;
+
+  const permissionQuery = await permissionChecker.sanitizedQuery.read(rawQuery);
+  let mergedFilters =
+    permissionQuery.filters && Object.keys(permissionQuery.filters).length
+      ? permissionQuery.filters
+      : null;
+
+  if (isTenantAdminScoped) {
+    const scopedFilter = getScopedContactFilter(tenantContext);
+    mergedFilters = mergedFilters
+      ? { $and: [mergedFilters, scopedFilter] }
+      : scopedFilter;
+  }
+
+  if (selectedIds.length) {
+    const selectedFilter = { id: { $in: selectedIds } };
+    mergedFilters = mergedFilters
+      ? { $and: [mergedFilters, selectedFilter] }
+      : selectedFilter;
+  }
+
+  const sort = permissionQuery.sort || ['id:desc'];
+  const filename = buildContactExportFilename({ isTenantAdminScoped });
+  const csvStream = formatCsv({ headers: true, writeBOM: true });
+
+  ctx.set('Content-Type', 'text/csv; charset=utf-8');
+  ctx.set('Content-Disposition', `attachment; filename="${filename}"`);
+  ctx.status = 200;
+  ctx.body = csvStream;
+
+  let start = 0;
+  const limit = 500;
+  let exportedCount = 0;
+
+  try {
+    while (true) {
+      const batch = await strapi.entityService.findMany(CONTACT_UID, {
+        filters: mergedFilters || undefined,
+        sort,
+        start,
+        limit,
+        fields: [
+          'id',
+          'name',
+          'phone',
+          'email',
+          'user_email',
+          'user_phone',
+          'tenant_admin_name',
+          'createdAt',
+          'updatedAt',
+        ],
+        populate: {
+          tenant: {
+            fields: ['id', 'name', 'slug'],
+          },
+          user: {
+            fields: ['id', 'email', 'phone'],
+          },
+        },
+      });
+
+      if (!Array.isArray(batch) || batch.length === 0) {
+        break;
+      }
+
+      for (const contact of batch) {
+        csvStream.write({
+          'Contact ID': sanitizeCsvCell(contact?.id),
+          Name: sanitizeCsvCell(contact?.name),
+          Phone: sanitizeCsvCell(contact?.phone),
+          Email: sanitizeCsvCell(contact?.email),
+          Tenant: sanitizeCsvCell(contact?.tenant?.name || contact?.tenant?.slug),
+          'Tenant Admin Name': sanitizeCsvCell(contact?.tenant_admin_name),
+          'Linked User Email': sanitizeCsvCell(contact?.user_email || contact?.user?.email),
+          'Linked User Phone': sanitizeCsvCell(contact?.user_phone || contact?.user?.phone),
+          'Created At': sanitizeCsvCell(contact?.createdAt),
+          'Updated At': sanitizeCsvCell(contact?.updatedAt),
+        });
+        exportedCount += 1;
+      }
+
+      start += batch.length;
+      if (batch.length < limit) {
+        break;
+      }
+    }
+
+    strapi.log.info(
+      `[contact-export] adminUser=${adminUser.id} isSuperAdmin=${tenantContext.isSuperAdmin} selectedIds=${selectedIds.length} exported=${exportedCount}`
+    );
+  } catch (error) {
+    strapi.log.error(
+      `[contact-export] Failed export for adminUser=${adminUser?.id || 'unknown'}: ${error.message}`
+    );
+    csvStream.destroy(error);
+    return;
+  }
+
+  csvStream.end();
+};
 
 const PRIVACY_POLICY_SECTIONS = [
   {
@@ -2592,13 +2750,38 @@ module.exports = {
                 )} tenantAdminRecordId=${tenantAdminRecordId || 'null'}`
               );
 
+              const sharedApp = await findSharedAppConfig(strapi);
               ctx.body = {
                 data: {
                   isTenantAdminScoped: !tenantContext.isSuperAdmin && tenantContext.tenantIds.length > 0,
                   canDeleteManagedRecords: tenantContext.isSuperAdmin,
+                  canExportContacts:
+                    tenantContext.isSuperAdmin ||
+                    sharedApp?.enable_tenant_admin_contact_export !== false,
                   tenantAdminRecordId,
                 },
               };
+            },
+            config: {
+              policies: ['admin::isAuthenticatedAdmin'],
+            },
+          },
+          {
+            method: 'GET',
+            path: '/contact-export',
+            handler: async (ctx) => {
+              const adminUser = await getAdminRequestUser(ctx, strapi);
+              if (!adminUser?.id) {
+                return ctx.unauthorized('Admin authentication is required.');
+              }
+
+              const tenantContext = await getAdminTenantContext(strapi, adminUser);
+              await streamContactsCsvExport({
+                ctx,
+                strapi,
+                adminUser,
+                tenantContext,
+              });
             },
             config: {
               policies: ['admin::isAuthenticatedAdmin'],

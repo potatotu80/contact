@@ -1914,6 +1914,126 @@ const BulkClearActions = () => {
   );
 };
 
+const extractSelectedContactIds = () => {
+  const selectedCheckboxes = Array.from(
+    document.querySelectorAll('tbody input[type="checkbox"]:checked')
+  );
+
+  const ids = selectedCheckboxes
+    .map((checkbox) => {
+      const row = checkbox.closest('tr');
+      if (!row) return null;
+
+      const recordLink = row.querySelector(`a[href*="/content-manager/collectionType/${CONTACT_UID}/"]`);
+      const href = recordLink?.getAttribute('href') || '';
+      const match = href.match(/\/content-manager\/collectionType\/api::contact\.contact\/(\d+)(?:\?.*)?$/);
+      return match?.[1] ? Number(match[1]) : null;
+    })
+    .filter((value) => Number.isInteger(value) && value > 0);
+
+  return [...new Set(ids)];
+};
+
+const ContactExportAction = () => {
+  const [isCapabilityLoading, setIsCapabilityLoading] = useState(true);
+  const [canExportContacts, setCanExportContacts] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const toggleNotification = useNotification();
+  const match = useRouteMatch('/content-manager/collectionType/:slug');
+  const slug = match?.params?.slug;
+  const isContactList = slug === CONTACT_UID;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCapabilities = async () => {
+      if (!isContactList) {
+        if (isMounted) {
+          setCanExportContacts(false);
+          setIsCapabilityLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setIsCapabilityLoading(true);
+        const capabilities = await fetchTenantAdminCapabilities();
+        if (!isMounted) return;
+        setCanExportContacts(capabilities?.canExportContacts !== false);
+      } catch (_error) {
+        if (!isMounted) return;
+        setCanExportContacts(false);
+      } finally {
+        if (isMounted) {
+          setIsCapabilityLoading(false);
+        }
+      }
+    };
+
+    void loadCapabilities();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isContactList]);
+
+  if (!isContactList || isCapabilityLoading || !canExportContacts) {
+    return null;
+  }
+
+  const exportContacts = () => {
+    if (isExporting) return;
+
+    try {
+      setIsExporting(true);
+      const currentUrl = new URL(window.location.href);
+      const exportUrl = new URL('/admin/contact-export', window.location.origin);
+      currentUrl.searchParams.forEach((value, key) => {
+        exportUrl.searchParams.append(key, value);
+      });
+
+      const selectedIds = extractSelectedContactIds();
+      if (selectedIds.length) {
+        exportUrl.searchParams.set('selectedIds', selectedIds.join(','));
+      }
+
+      const link = document.createElement('a');
+      link.href = exportUrl.toString();
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toggleNotification({
+        type: 'success',
+        message: selectedIds.length
+          ? `Exporting ${selectedIds.length} selected contact(s).`
+          : 'Contact export started.',
+      });
+    } catch (_error) {
+      toggleNotification({
+        type: 'warning',
+        message: 'Failed to start contact export.',
+      });
+    } finally {
+      window.setTimeout(() => {
+        setIsExporting(false);
+      }, 1000);
+    }
+  };
+
+  return (
+    <Button
+      variant="secondary"
+      size="S"
+      onClick={exportContacts}
+      disabled={isExporting}
+    >
+      {isExporting ? 'Exporting...' : 'Export Contacts'}
+    </Button>
+  );
+};
+
 const TenantAdminQrListCopyButtons = () => {
   const match = useRouteMatch('/content-manager/collectionType/:slug');
   const slug = match?.params?.slug;
@@ -2762,6 +2882,11 @@ const bootstrap = (app) => {
   app.injectContentManagerComponent('listView', 'actions', {
     name: 'bulk-clear-actions',
     Component: BulkClearActions,
+  });
+
+  app.injectContentManagerComponent('listView', 'actions', {
+    name: 'contact-export-action',
+    Component: ContactExportAction,
   });
 
   app.injectContentManagerComponent('listView', 'actions', {
