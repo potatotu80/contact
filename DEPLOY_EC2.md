@@ -75,6 +75,14 @@ S3_PRESIGN_EXPIRES_IN=900
 STRAPI_ADMIN_S3_BUCKET=yengtesting
 STRAPI_ADMIN_S3_REGION=ap-southeast-1
 STRAPI_ADMIN_S3_IMAGES_PREFIX=users
+BACKUP_R2_BUCKET=contact
+BACKUP_R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+BACKUP_R2_ACCESS_KEY_ID=replace-me
+BACKUP_R2_SECRET_ACCESS_KEY=replace-me
+BACKUP_R2_REGION=auto
+BACKUP_RETENTION_DAYS=7
+BACKUP_LOCAL_DIR=/var/backups/contact
+BACKUP_KEEP_LOCAL=false
 APP_KEYS="replace-me-1,replace-me-2,replace-me-3,replace-me-4"
 API_TOKEN_SALT=replace-me
 ADMIN_JWT_SECRET=replace-me
@@ -194,7 +202,47 @@ Allow:
 
 Keep port `1337` private to the instance. Nginx should be the only public entrypoint.
 
-## 11. Verification
+## 11. Daily Backups To R2
+
+This project includes a backup script at [deploy/backup/backup-to-r2.sh](/c:/Personal/Codex/Contact/deploy/backup/backup-to-r2.sh).
+
+It backs up:
+
+- PostgreSQL using `pg_dump`
+- Strapi Media Library local files from `public/uploads`
+
+Install the required tools:
+
+```bash
+sudo apt install -y postgresql-client awscli
+sudo mkdir -p /var/backups/contact
+sudo chmod 700 /var/backups/contact
+chmod +x /var/www/contact/deploy/backup/backup-to-r2.sh
+```
+
+Test it manually:
+
+```bash
+cd /var/www/contact
+./deploy/backup/backup-to-r2.sh
+```
+
+Recommended cron entry for a daily `2:00 AM` backup:
+
+```bash
+0 2 * * * cd /var/www/contact && ./deploy/backup/backup-to-r2.sh >> /var/log/contact-backup.log 2>&1
+```
+
+The script uploads to these prefixes in R2:
+
+- `db-backups/`
+- `media-backups/`
+
+It also removes remote backups older than `BACKUP_RETENTION_DAYS` days. The default is `7`.
+
+You can additionally configure an R2 lifecycle rule to delete objects in those prefixes after `7` days as a second layer of protection.
+
+## 12. Verification
 
 After deployment:
 
