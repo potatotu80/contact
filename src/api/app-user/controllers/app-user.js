@@ -798,6 +798,10 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     const objectKey = `${buildTenantUserImagePrefix(tenant, userId, prefixBase)}/${storedFileName}`;
     const objectStorageClient = createObjectStorageClient();
 
+    strapi.log.info(
+      `[app-user][uploadProfileImage] start userId=${userId} tenantId=${tenant.id} fileName=${storedFileName} mimeType=${mimeType || 'unknown'} objectKey=${objectKey}`
+    );
+
     try {
       const fileBuffer = await fs.readFile(sourcePath);
       await objectStorageClient.putObject({
@@ -811,6 +815,9 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     }
 
     const imageUrl = buildObjectStoragePublicUrl(bucket, region, objectKey);
+    strapi.log.info(
+      `[app-user][uploadProfileImage] uploaded userId=${userId} tenantId=${tenant.id} objectKey=${objectKey} imageUrl=${imageUrl}`
+    );
 
     const updatedUser = await strapi.entityService.update(APP_USER_UID, userId, {
       data: {
@@ -824,6 +831,18 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
         },
       },
     });
+
+    const persistedImageUrl = String(updatedUser?.image_url || '').trim();
+    if (!persistedImageUrl) {
+      strapi.log.error(
+        `[app-user][uploadProfileImage] missing persisted image_url after update userId=${userId} tenantId=${tenant.id} objectKey=${objectKey}`
+      );
+      return ctx.internalServerError('Image upload could not be confirmed on the server.');
+    }
+
+    strapi.log.info(
+      `[app-user][uploadProfileImage] saved userId=${userId} tenantId=${tenant.id} persistedImageUrl=${persistedImageUrl}`
+    );
 
     const sanitizedUser = await this.sanitizeOutput(updatedUser, ctx);
 
