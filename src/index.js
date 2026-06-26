@@ -1289,6 +1289,38 @@ const syncContactListConfiguration = async (strapi) => {
     layouts: {
       ...(configuration.layouts || {}),
       list: desiredListLayout,
+      edit: configuration.layouts?.edit || [
+        [
+          {
+            name: 'name',
+            size: 6,
+          },
+          {
+            name: 'phone',
+            size: 6,
+          },
+        ],
+        [
+          {
+            name: 'tenant',
+            size: 6,
+          },
+          {
+            name: 'tenant_admin_name',
+            size: 6,
+          },
+        ],
+        [
+          {
+            name: 'user_email',
+            size: 6,
+          },
+          {
+            name: 'user_phone',
+            size: 6,
+          },
+        ],
+      ],
     },
     metadatas: {
       ...(configuration.metadatas || {}),
@@ -1342,6 +1374,7 @@ const syncContactListConfiguration = async (strapi) => {
           ...(configuration.metadatas?.tenant_admin_name?.edit || {}),
           label: 'Tenant Admin Name',
         },
+        visible: true,
       },
     },
   };
