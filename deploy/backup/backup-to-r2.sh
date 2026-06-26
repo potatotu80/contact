@@ -9,6 +9,7 @@ BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
 BACKUP_KEEP_LOCAL="${BACKUP_KEEP_LOCAL:-false}"
 BACKUP_DB_PREFIX="${BACKUP_DB_PREFIX:-db-backups}"
 BACKUP_MEDIA_PREFIX="${BACKUP_MEDIA_PREFIX:-media-backups}"
+AWS_BIN="${AWS_BIN:-}"
 
 log() {
   printf '[backup][%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -19,6 +20,34 @@ require_command() {
     log "missing required command: $1"
     exit 1
   fi
+}
+
+resolve_aws_bin() {
+  if [[ -n "${AWS_BIN:-}" && -x "${AWS_BIN:-}" ]]; then
+    printf '%s\n' "$AWS_BIN"
+    return 0
+  fi
+
+  local candidates=(
+    "${HOME:-}/.local/bin/aws"
+    "/usr/local/bin/aws"
+    "/usr/bin/aws"
+  )
+
+  local candidate
+  for candidate in "${candidates[@]}"; do
+    if [[ -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  if command -v aws >/dev/null 2>&1; then
+    command -v aws
+    return 0
+  fi
+
+  return 1
 }
 
 load_env_file() {
@@ -49,7 +78,7 @@ upload_file() {
   AWS_ACCESS_KEY_ID="$BACKUP_R2_ACCESS_KEY_ID" \
   AWS_SECRET_ACCESS_KEY="$BACKUP_R2_SECRET_ACCESS_KEY" \
   AWS_DEFAULT_REGION="$BACKUP_R2_REGION" \
-  aws --endpoint-url "$BACKUP_R2_ENDPOINT" s3 cp \
+  "$AWS_BIN" --endpoint-url "$BACKUP_R2_ENDPOINT" s3 cp \
     "$source_file" \
     "$(build_s3_uri "$object_key")" \
     --only-show-errors
@@ -68,7 +97,7 @@ prune_remote_prefix() {
       AWS_ACCESS_KEY_ID="$BACKUP_R2_ACCESS_KEY_ID" \
       AWS_SECRET_ACCESS_KEY="$BACKUP_R2_SECRET_ACCESS_KEY" \
       AWS_DEFAULT_REGION="$BACKUP_R2_REGION" \
-      aws --endpoint-url "$BACKUP_R2_ENDPOINT" s3 rm \
+      "$AWS_BIN" --endpoint-url "$BACKUP_R2_ENDPOINT" s3 rm \
         "$(build_s3_uri "$object_key")" \
         --only-show-errors >/dev/null
     fi
@@ -76,7 +105,7 @@ prune_remote_prefix() {
     AWS_ACCESS_KEY_ID="$BACKUP_R2_ACCESS_KEY_ID" \
     AWS_SECRET_ACCESS_KEY="$BACKUP_R2_SECRET_ACCESS_KEY" \
     AWS_DEFAULT_REGION="$BACKUP_R2_REGION" \
-    aws --endpoint-url "$BACKUP_R2_ENDPOINT" s3 ls \
+    "$AWS_BIN" --endpoint-url "$BACKUP_R2_ENDPOINT" s3 ls \
       "$(build_s3_uri "$prefix/")" \
       --recursive
   )
@@ -86,8 +115,14 @@ main() {
   require_command pg_dump
   require_command gzip
   require_command tar
-  require_command aws
   require_command date
+
+  AWS_BIN="$(resolve_aws_bin || true)"
+  if [[ -z "$AWS_BIN" ]]; then
+    log "missing required command: aws"
+    log "set AWS_BIN explicitly or install aws via apt/pipx so it is available in PATH or ~/.local/bin/aws"
+    exit 1
+  fi
 
   load_env_file
 
