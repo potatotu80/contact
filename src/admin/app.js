@@ -2271,6 +2271,108 @@ const config = {
 
 const SETTINGS_USERS_PATH = '/admin/settings/users';
 const APP_USERS_COLLECTION_PATH = '/admin/content-manager/collectionType/api::app-user.app-user';
+const COLLECTION_LIST_STATE_KEY_PREFIX = 'contentManagerListState:';
+
+const getCollectionRouteMatch = () => {
+  const match = window.location.pathname.match(
+    /^\/admin\/content-manager\/collectionType\/([^/]+)(?:\/([^/]+))?$/
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    slug: decodeURIComponent(match[1]),
+    entitySegment: match[2] ? decodeURIComponent(match[2]) : '',
+  };
+};
+
+const getCollectionListStateKey = (slug) => `${COLLECTION_LIST_STATE_KEY_PREFIX}${slug}`;
+
+const persistCurrentCollectionListUrl = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const routeMatch = getCollectionRouteMatch();
+  if (!routeMatch || routeMatch.entitySegment) {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(
+      getCollectionListStateKey(routeMatch.slug),
+      `${window.location.pathname}${window.location.search}${window.location.hash}`
+    );
+  } catch (_error) {
+    // Ignore storage failures.
+  }
+};
+
+const restoreStoredCollectionBackLink = () => {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const routeMatch = getCollectionRouteMatch();
+  if (!routeMatch || !routeMatch.entitySegment || routeMatch.entitySegment === 'create') {
+    return;
+  }
+
+  let storedListUrl = '';
+  try {
+    storedListUrl = window.sessionStorage.getItem(getCollectionListStateKey(routeMatch.slug)) || '';
+  } catch (_error) {
+    storedListUrl = '';
+  }
+
+  if (!storedListUrl) {
+    return;
+  }
+
+  const canonicalListPath = `/admin/content-manager/collectionType/${routeMatch.slug}`;
+  const backLinks = Array.from(document.querySelectorAll('a[href], button'))
+    .filter((node) => String(node.textContent || '').trim().toLowerCase() === 'back');
+
+  backLinks.forEach((node) => {
+    const href = node instanceof HTMLAnchorElement ? String(node.getAttribute('href') || '') : '';
+    const isDefaultCollectionBackLink =
+      node instanceof HTMLAnchorElement &&
+      (href === canonicalListPath || href === `${canonicalListPath}?`);
+
+    if (!(node instanceof HTMLAnchorElement) && !(node instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    if (node instanceof HTMLAnchorElement && !isDefaultCollectionBackLink) {
+      return;
+    }
+
+    if (node.dataset.preservedListBound === 'true') {
+      if (node instanceof HTMLAnchorElement) {
+        node.setAttribute('href', storedListUrl);
+      }
+      return;
+    }
+
+    node.dataset.preservedListBound = 'true';
+
+    if (node instanceof HTMLAnchorElement) {
+      node.setAttribute('href', storedListUrl);
+    }
+
+    node.addEventListener(
+      'click',
+      (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        window.location.assign(storedListUrl);
+      },
+      true
+    );
+  });
+};
 
 const syncDescendingIdSort = (pathPrefix) => {
   if (!window.location.pathname.startsWith(pathPrefix)) {
@@ -2297,6 +2399,11 @@ const syncSettingsUsersQuery = () => {
 
 const syncAppUsersQuery = () => {
   syncDescendingIdSort(APP_USERS_COLLECTION_PATH);
+};
+
+const syncCollectionListState = () => {
+  persistCurrentCollectionListUrl();
+  restoreStoredCollectionBackLink();
 };
 
 const installSettingsUsersSortGuard = () => {
@@ -2328,12 +2435,14 @@ const installAppUsersSortGuard = () => {
 
   window.__appUsersSortGuardInstalled = true;
   syncAppUsersQuery();
+  syncCollectionListState();
 
   const wrapHistoryMethod = (methodName) => {
     const original = window.history[methodName];
     window.history[methodName] = function wrappedHistoryMethod(...args) {
       const result = original.apply(this, args);
       window.setTimeout(syncAppUsersQuery, 0);
+      window.setTimeout(syncCollectionListState, 0);
       return result;
     };
   };
@@ -2341,6 +2450,16 @@ const installAppUsersSortGuard = () => {
   wrapHistoryMethod('pushState');
   wrapHistoryMethod('replaceState');
   window.addEventListener('popstate', syncAppUsersQuery);
+  window.addEventListener('popstate', syncCollectionListState);
+
+  const observer = new MutationObserver(() => {
+    restoreStoredCollectionBackLink();
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+  });
 };
 
 const TENANT_ADMIN_CAPABILITIES_PATH = '/admin/tenant-admin/capabilities';
