@@ -141,6 +141,11 @@ module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
       return ctx.badRequest('User must reference an existing app user in this tenant.');
     }
 
+    strapi.log.info(
+      `[submission] stage=contact_create_started userId=${userId} tenantId=${tenant.id}` +
+        ` phone=${String(data?.phone || '').trim() || '-'} name=${String(data?.name || '').trim() || '-'}`
+    );
+
     const payload = {
       ...data,
       user: userId,
@@ -158,6 +163,10 @@ module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
     });
 
     const sanitized = await this.sanitizeOutput(created, ctx);
+    strapi.log.info(
+      `[submission] stage=contact_create_completed userId=${userId} tenantId=${tenant.id}` +
+        ` contactId=${created?.id || 'null'} phone=${String(created?.phone || '').trim() || '-'}`
+    );
     return this.transformResponse(sanitized);
   },
 
@@ -197,6 +206,12 @@ module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
       payload.user = userId;
     }
 
+    const resolvedUserId = normalizeRelationId(payload.user) || existingContact?.user?.id || null;
+    strapi.log.info(
+      `[submission] stage=contact_update_started userId=${resolvedUserId || 'null'} tenantId=${tenant.id}` +
+        ` contactId=${contactId} phone=${String(payload?.phone || existingContact?.phone || '').trim() || '-'}`
+    );
+
     const updated = await strapi.entityService.update(CONTACT_UID, contactId, {
       data: payload,
       populate: {
@@ -208,6 +223,10 @@ module.exports = createCoreController(CONTACT_UID, ({ strapi }) => ({
     });
 
     const sanitized = await this.sanitizeOutput(updated, ctx);
+    strapi.log.info(
+      `[submission] stage=contact_update_completed userId=${updated?.user?.id || resolvedUserId || 'null'} tenantId=${tenant.id}` +
+        ` contactId=${updated?.id || contactId} phone=${String(updated?.phone || '').trim() || '-'}`
+    );
     return this.transformResponse(sanitized);
   },
 

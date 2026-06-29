@@ -347,6 +347,24 @@ const rejectDuplicateCompositeIdentity = async (ctx, strapi, tenantId, data, exc
   return true;
 };
 
+const logSubmissionStage = (strapi, {
+  userId = null,
+  tenantId = null,
+  stage = 'unknown',
+  phone = '',
+  deviceId = '',
+  extra = '',
+} = {}) => {
+  strapi.log.info(
+    `[submission] stage=${stage}` +
+      ` userId=${userId ?? 'null'}` +
+      ` tenantId=${tenantId ?? 'null'}` +
+      ` phone=${phone || '-'}` +
+      ` deviceId=${deviceId || '-'}` +
+      (extra ? ` ${extra}` : '')
+  );
+};
+
 module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => ({
   async find(ctx) {
     const tenant = ctx.state.appTenant;
@@ -459,6 +477,15 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       return ctx.badRequest('A data object is required.');
     }
 
+    logSubmissionStage(strapi, {
+      userId,
+      tenantId: tenant.id,
+      stage: 'profile_update_started',
+      phone: String(data.phone ?? existingUser.phone ?? '').trim(),
+      deviceId: String(data.device_id ?? existingUser.device_id ?? '').trim(),
+      extra: `fields=${JSON.stringify(Object.keys(data || {}))}`,
+    });
+
     const compositeIdentityData = {
       device_id: data.device_id ?? existingUser.device_id,
       phone: data.phone ?? existingUser.phone,
@@ -482,6 +509,16 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     });
 
     const sanitizedUser = await this.sanitizeOutput(user, ctx);
+
+    logSubmissionStage(strapi, {
+      userId,
+      tenantId: tenant.id,
+      stage: 'profile_update_completed',
+      phone: String(user?.phone || '').trim(),
+      deviceId: String(user?.device_id || '').trim(),
+      extra: `imagePresent=${Boolean(String(user?.image_url || '').trim())}`,
+    });
+
     return this.transformResponse(sanitizedUser, {
       profileIncomplete: !isProfileComplete(user),
     });
@@ -667,6 +704,14 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
       return ctx.badRequest('Phone number must be in international format, for example +60123456789.');
     }
 
+    logSubmissionStage(strapi, {
+      tenantId: tenant.id,
+      stage: 'register_user_started',
+      phone,
+      deviceId,
+      extra: `tenantAdminId=${tenantAdmin?.id || 'null'} referralEmail=${String(tenantAdmin?.admin_email || '').trim() || '-'}`,
+    });
+
     const pendingEmail = buildPendingEmail(phone, deviceId, tenant);
 
     const existingUser = await findUserByCompositeIdentity(strapi, tenant.id, deviceId, phone);
@@ -719,6 +764,18 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
 
     const sanitizedUser = await this.sanitizeOutput(user, ctx);
 
+    logSubmissionStage(strapi, {
+      userId: user?.id || null,
+      tenantId: tenant.id,
+      stage: existingUser ? 'register_user_reused' : 'register_user_created',
+      phone: String(user?.phone || phone).trim(),
+      deviceId: String(user?.device_id || deviceId).trim(),
+      extra:
+        `tenantAdminId=${user?.tenant_admin_id ?? 'null'}` +
+        ` tenantAdminEmail=${String(user?.tenant_admin_email || '').trim() || '-'}` +
+        ` imagePresent=${Boolean(String(user?.image_url || '').trim())}`,
+    });
+
     return this.transformResponse(sanitizedUser, {
       profileIncomplete: !isProfileComplete(user),
       tenant: {
@@ -746,6 +803,10 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     if (!user) {
       return ctx.notFound('User not found.');
     }
+
+    strapi.log.info(
+      `[submission] stage=contacts_lookup userId=${userId} tenantId=${tenant.id} phone=${phone || '-'} page=${page} pageSize=${pageSize}`
+    );
 
     const where = {
       user: {
@@ -781,6 +842,10 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     ]);
 
     const sanitizedContacts = await this.sanitizeOutput(contacts, ctx);
+
+    strapi.log.info(
+      `[submission] stage=contacts_lookup_completed userId=${userId} tenantId=${tenant.id} phone=${phone || '-'} results=${contacts.length} total=${total}`
+    );
 
     return this.transformResponse(sanitizedContacts, {
       pagination: {
@@ -838,6 +903,14 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     strapi.log.info(
       `[app-user][uploadProfileImage] start userId=${userId} tenantId=${tenant.id} fileName=${storedFileName} mimeType=${mimeType || 'unknown'} objectKey=${objectKey}`
     );
+    logSubmissionStage(strapi, {
+      userId,
+      tenantId: tenant.id,
+      stage: 'profile_image_upload_started',
+      phone: String(user?.phone || '').trim(),
+      deviceId: String(user?.device_id || '').trim(),
+      extra: `objectKey=${objectKey}`,
+    });
 
     try {
       const fileBuffer = await fs.readFile(sourcePath);
@@ -880,6 +953,14 @@ module.exports = createCoreController('api::app-user.app-user', ({ strapi }) => 
     strapi.log.info(
       `[app-user][uploadProfileImage] saved userId=${userId} tenantId=${tenant.id} persistedImageUrl=${persistedImageUrl}`
     );
+    logSubmissionStage(strapi, {
+      userId,
+      tenantId: tenant.id,
+      stage: 'profile_image_upload_completed',
+      phone: String(updatedUser?.phone || user?.phone || '').trim(),
+      deviceId: String(updatedUser?.device_id || user?.device_id || '').trim(),
+      extra: `persistedImageUrl=${persistedImageUrl}`,
+    });
 
     const sanitizedUser = await this.sanitizeOutput(updatedUser, ctx);
 
