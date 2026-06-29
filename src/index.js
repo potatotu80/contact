@@ -327,7 +327,9 @@ const getScopedUserFilter = (tenantContext) => {
 
   if (tenantAdminIds.length) {
     ownershipFilters.push({ tenant_admin_id: { $in: tenantAdminIds } });
-  } else if (tenantAdminEmails.length) {
+  }
+
+  if (tenantAdminEmails.length) {
     ownershipFilters.push({ tenant_admin_email: { $in: tenantAdminEmails } });
   }
 
@@ -351,7 +353,9 @@ const getScopedContactFilter = (tenantContext) => {
 
   if (tenantAdminIds.length) {
     ownershipFilters.push({ user: { tenant_admin_id: { $in: tenantAdminIds } } });
-  } else if (tenantAdminEmails.length) {
+  }
+
+  if (tenantAdminEmails.length) {
     ownershipFilters.push({ user: { tenant_admin_email: { $in: tenantAdminEmails } } });
   }
 
